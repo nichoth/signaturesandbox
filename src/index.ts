@@ -33,7 +33,7 @@ export const App:FunctionComponent = function App () {
     const ChildNode = match.action(match, state.route.value)
 
     return html`<div class="app">
-        <${ChildNode} />
+        <${ChildNode} state=${state} />
     </div>`
 }
 

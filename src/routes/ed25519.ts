@@ -1,67 +1,30 @@
 import { html } from 'htm/preact'
 import { FunctionComponent } from 'preact'
+import { useCallback } from 'preact/hooks'
 import { signal } from '@preact/signals'
-import { verify as ed25519Verify, EccKeys } from '@substrate-system/keys/ecc'
-
-type Encoding = 'base64' | 'base58' | 'base64url' | 'hex'
+import { verify as ed25519Verify } from '@substrate-system/keys/ecc'
+import { State } from '../state.js'
+import Debug from '@substrate-system/debug'
+const debug = Debug(import.meta.env.DEV)
 
 // Generator state
-const genKeys = signal<EccKeys | null>(null)
 const genMessage = signal('')
 const genSignature = signal('')
-const genSignatureBytes = signal<Uint8Array | null>(null)
-const genPublicKey = signal('')
-const genDid = signal('')
-const genEncoding = signal<Encoding>('base64')
-const genSigEncoding = signal<Encoding>('base64')
+const genSignatureBytes = signal<Uint8Array|null>(null)
 
-// Verifier state
-const verMessage = signal('')
-const verSignature = signal('')
-const verPublicKey = signal('')
-const verEncoding = signal<Encoding>('base64')
-const verResult = signal<{ valid: boolean, error?: string } | null>(null)
-
-export const Ed25519Route:FunctionComponent = function Ed25519Route () {
-    async function generateKeys () {
-        try {
-            const keys = await EccKeys.create(true, true)
-            genKeys.value = keys
-
-            const json = await keys.toJson('base64')
-            genDid.value = json.DID
-
-            // Get the public key in the selected encoding
-            await updatePublicKeyEncoding()
-        } catch (error) {
-            console.error('Failed to generate keys:', error)
-        }
-    }
-
-    async function updatePublicKeyEncoding () {
-        if (!genKeys.value) return
-
-        try {
-            // Get the public key - base58 and hex require manual conversion
-            if (genEncoding.value === 'base58' || genEncoding.value === 'hex') {
-                const base64Key = await genKeys.value.publicWriteKey.asString('base64')
-                const bytes = base64ToBytes(base64Key)
-                const encoded = await encodeBytes(bytes, genEncoding.value)
-                genPublicKey.value = encoded
-            } else {
-                const publicKeyString = await genKeys.value.publicWriteKey.asString(genEncoding.value)
-                genPublicKey.value = publicKeyString
-            }
-        } catch (error) {
-            console.error('Failed to convert public key:', error)
-        }
-    }
+export const Ed25519Route:FunctionComponent<{
+    state:ReturnType<typeof State
+>}> = function Ed25519Route ({ state }) {
+    debug('rendering...', state)
+    const generateKeys = useCallback(async () => {
+        State.generateEcc(state)
+    }, [])
 
     async function signMessage () {
-        if (!genKeys.value || !genMessage.value) return
+        if (!state.eccKeys.value) return
 
         try {
-            const sigBytes = await genKeys.value.sign(genMessage.value)
+            const sigBytes = await state.eccKeys.value.sign()
             genSignatureBytes.value = sigBytes
 
             // Convert signature to selected encoding
@@ -288,15 +251,18 @@ export const Ed25519Route:FunctionComponent = function Ed25519Route () {
                     </div>
 
                     <div class="key-display">
-                        <label>Public Key (${genEncoding.value}):</label>
+                        <h3>
+                            Public Key (${state.encodings.publicKey.value}):
+                        </h3>
                         <div class="output-field">
                             <div class="output-content">${genPublicKey.value}</div>
                             <copy-button payload=${genPublicKey.value || 'placeholder'}></copy-button>
                         </div>
                     </div>
 
-                    <div class="form-group">
+                    <form class="form-group" onSubmit=${signMessage}>
                         <label for="gen-message">Message to Sign:</label>
+
                         <textarea
                             id="gen-message"
                             value=${genMessage.value}
@@ -304,15 +270,15 @@ export const Ed25519Route:FunctionComponent = function Ed25519Route () {
                             placeholder="Enter message to sign"
                             rows="4"
                         ></textarea>
-                    </div>
 
-                    <button
-                        class="action-button"
-                        onClick=${signMessage}
-                        disabled=${!genMessage.value}
-                    >
-                        Sign Message
-                    </button>
+                        <button
+                            class="action-button"
+                            type="submit"
+                            disabled=${!genMessage.value}
+                        >
+                            Sign Message
+                        </button>
+                    </form>
 
                     ${genSignature.value && html`
                         <div class="form-group">
