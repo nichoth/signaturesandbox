@@ -1,30 +1,26 @@
-import { html } from 'htm/preact'
 import Router from '@substrate-system/routes'
 import { HomeRoute } from './home.js'
+import { Ed25519Route } from './ed25519.js'
+import { RSARoute } from './rsa.js'
+import { UCANRoute } from './ucan.js'
 
-export default function _Router ():ReturnType<Router> {
+export default function _Router ():Router {
     const router = new Router()
 
     router.addRoute('/', () => {
         return HomeRoute
     })
 
-    router.addRoute('/aaa', () => {
-        return () => {
-            return html`<h2>aaa</h2>`
-        }
+    router.addRoute('/ed25519', () => {
+        return Ed25519Route
     })
 
-    router.addRoute('/bbb', () => {
-        return () => {
-            return html`<h2>bbb</h2>`
-        }
+    router.addRoute('/rsa', () => {
+        return RSARoute
     })
 
-    router.addRoute('/ccc', () => {
-        return () => {
-            return html`<h2>ccc</h2>`
-        }
+    router.addRoute('/ucan', () => {
+        return UCANRoute
     })
 
     return router

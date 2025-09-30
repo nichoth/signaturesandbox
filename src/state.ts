@@ -7,14 +7,12 @@ import Route from 'route-event'
  */
 export function State ():{
     route:Signal<string>;
-    count:Signal<number>;
     _setRoute:(path:string)=>void;
 } {  // eslint-disable-line indent
     const onRoute = Route()
 
     const state = {
         _setRoute: onRoute.setRoute.bind(onRoute),
-        count: signal<number>(0),
         route: signal<string>(location.pathname + location.search)
     }
 
@@ -22,8 +20,7 @@ export function State ():{
      * set the app state to match the browser URL
      */
     onRoute((path:string, data) => {
-        // for github pages
-        const newPath = path.replace('/template-ts-preact-htm/', '/')
+        const newPath = path
         state.route.value = newPath
         // handle scroll state like a web browser
         // (restore scroll position on back/forward)
@@ -35,12 +32,4 @@ export function State ():{
     })
 
     return state
-}
-
-State.Increase = function (state:ReturnType<typeof State>) {
-    state.count.value++
-}
-
-State.Decrease = function (state:ReturnType<typeof State>) {
-    state.count.value--
 }

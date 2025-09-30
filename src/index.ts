@@ -1,15 +1,13 @@
 import { html } from 'htm/preact'
 import { FunctionComponent, render } from 'preact'
-import {
-    Primary as ButtonOutlinePrimary,
-    ButtonOutline
-} from '@nichoth/components/htm/button-outline'
 import { createDebug } from '@substrate-system/debug'
-import ky from 'ky'
 import { State } from './state.js'
 import Router from './routes/index.js'
-import '@nichoth/components/button-outline.css'
+import '@substrate-system/copy-button'
+import '@substrate-system/copy-button/css'
 import './style.css'
+import '@substrate-system/a11y'
+import '@substrate-system/css-normalize'
 
 const router = Router()
 const state = State()
@@ -20,64 +18,23 @@ if (import.meta.env.DEV || import.meta.env.MODE === 'staging') {
     window.state = state
 }
 
-// example of calling our API
-const json = await ky.get('/api/example').json()
-
-export const Example:FunctionComponent = function Example () {
-    debug('rendering example...')
+export const App:FunctionComponent = function App () {
+    debug('rendering app...')
     const match = router.match(state.route.value)
-    const ChildNode = match.action(match, state.route.value)
 
-    if (!match) {
+    if (!match || !match.action) {
         return html`<div class="404">
             <h1>404</h1>
+            <p>Page not found</p>
+            <a href="/">Go home</a>
         </div>`
     }
 
-    function plus (ev) {
-        ev.preventDefault()
-        State.Increase(state)
-    }
+    const ChildNode = match.action(match, state.route.value)
 
-    function minus (ev) {
-        ev.preventDefault()
-        State.Decrease(state)
-    }
-
-    return html`<div>
-        <h1>example</h1>
-
-        <h2>the API response</h2>
-        <pre>
-            ${JSON.stringify(json, null, 2)}
-        </pre>
-
-        <h2>routes</h2>
-        <ul>
-            <li><a href="/aaa">aaa</a></li>
-            <li><a href="/bbb">bbb</a></li>
-            <li><a href="/ccc">ccc</a></li>
-        </ul>
-
-        <h2>counter</h2>
-        <div>
-            <div>count: ${state.count.value}</div>
-            <ul class="count-controls">
-                <li>
-                    <${ButtonOutlinePrimary} onClick=${plus}>
-                        plus
-                    </${ButtonOutline}>
-                </li>
-                <li>
-                    <${ButtonOutline} onClick=${minus}>
-                        minus
-                    </${ButtonOutline}>
-                </li>
-            </ul>
-        </div>
-
+    return html`<div class="app">
         <${ChildNode} />
     </div>`
 }
 
-render(html`<${Example} />`, document.getElementById('root')!)
+render(html`<${App} />`, document.getElementById('root')!)
