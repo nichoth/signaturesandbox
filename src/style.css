@@ -28,6 +28,19 @@ copy-button {
     }
 }
 
+a.btn {
+    padding: 1rem;
+    background: var(--nice-blue);
+    color: white;
+    text-decoration: none;
+    text-align: center;
+    transition: background-color 0.2s;
+
+    &:hover {
+        background: var(--darker-blue);
+    }
+}
+
 body {
     font-family: system-ui, -apple-system, sans-serif;
     line-height: 1.6;
@@ -90,25 +103,21 @@ body {
     & ul {
         list-style: none;
         padding: 0;
+        display: flex;
+        justify-content: space-between;
     }
 
     & li {
-        margin-bottom: 1rem;
-    }
-
-    & a {
-        display: block;
+        margin: 1rem 0;
         padding: 1rem;
-        background: var(--nice-blue);
-        color: white;
-        text-decoration: none;
-        text-align: center;
-        transition: background-color 0.2s;
+        padding-left: 0;
 
-        &:hover {
-            background: var(--darker-blue);
+        & a {
+            min-width: 12rem;
+            display: inline-block;
         }
     }
+
 }
 
 .verification-form {
@@ -118,7 +127,7 @@ body {
 .form-group {
     margin-bottom: 1.5rem;
 
-    & label {
+    & > label {
         display: block;
         font-weight: 600;
         margin-bottom: 0.5rem;
@@ -142,6 +151,27 @@ body {
 
     & select {
         font-family: system-ui, -apple-system, sans-serif;
+    }
+}
+
+.radio-group {
+    display: flex;
+    gap: 1.5rem;
+    flex-wrap: wrap;
+}
+
+.radio-label {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    cursor: pointer;
+    font-weight: 400;
+
+    & input[type="radio"] {
+        cursor: pointer;
+        width: 1.1rem;
+        height: 1.1rem;
+        accent-color: var(--nice-blue);
     }
 }
 

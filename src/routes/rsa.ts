@@ -9,9 +9,11 @@ type Encoding = 'base64' | 'base58' | 'base64url' | 'hex'
 const genKeys = signal<RsaKeys | null>(null)
 const genMessage = signal('')
 const genSignature = signal('')
+const genSignatureBytes = signal<Uint8Array | null>(null)
 const genPublicKey = signal('')
 const genDid = signal('')
 const genEncoding = signal<Encoding>('base64')
+const genSigEncoding = signal<Encoding>('base64')
 
 // Verifier state
 const verMessage = signal('')
@@ -58,10 +60,23 @@ export const RSARoute:FunctionComponent = function RSARoute () {
 
         try {
             const sigBytes = await genKeys.value.sign(genMessage.value)
-            const encoded = await encodeBytes(sigBytes, genEncoding.value)
-            genSignature.value = encoded
+            genSignatureBytes.value = sigBytes
+
+            // Convert signature to selected encoding
+            await updateSignatureEncoding()
         } catch (error) {
             console.error('Failed to sign message:', error)
+        }
+    }
+
+    async function updateSignatureEncoding () {
+        if (!genSignatureBytes.value) return
+
+        try {
+            const encoded = await encodeBytes(genSignatureBytes.value, genSigEncoding.value)
+            genSignature.value = encoded
+        } catch (error) {
+            console.error('Failed to convert signature:', error)
         }
     }
 
@@ -211,12 +226,12 @@ export const RSARoute:FunctionComponent = function RSARoute () {
                 <h2>Generator</h2>
 
                 <button class="action-button" onClick=${generateKeys}>
-                    Generate Keys
+                    Generate RSA Keypair
                 </button>
 
                 ${genKeys.value && html`
                     <div class="key-display">
-                        <label>DID:</label>
+                        <h4>DID:</h4>
                         <div class="output-field">
                             <div class="output-content">${genDid.value}</div>
                             <copy-button payload=${genDid.value || 'placeholder'}>
@@ -225,20 +240,48 @@ export const RSARoute:FunctionComponent = function RSARoute () {
                     </div>
 
                     <div class="form-group">
-                        <label for="gen-encoding">Encoding:</label>
-                        <select
-                            id="gen-encoding"
-                            value=${genEncoding.value}
-                            onChange=${async (e:any) => {
-                                genEncoding.value = e.target.value as Encoding
-                                await updatePublicKeyEncoding()
-                            }}
-                        >
-                            <option value="base64">Base64</option>
-                            <option value="base58">Base58</option>
-                            <option value="base64url">Base64URL</option>
-                            <option value="hex">Hex</option>
-                        </select>
+                        <label>Public Key Encoding:</label>
+                        <div class="radio-group">
+                            <label class="radio-label">
+                                <input
+                                    type="radio"
+                                    name="gen-encoding"
+                                    value="base64"
+                                    checked=${genEncoding.value === 'base64'}
+                                    onChange=${async () => {
+                                        genEncoding.value = 'base64'
+                                        await updatePublicKeyEncoding()
+                                    }}
+                                />
+                                Base64
+                            </label>
+                            <label class="radio-label">
+                                <input
+                                    type="radio"
+                                    name="gen-encoding"
+                                    value="base64url"
+                                    checked=${genEncoding.value === 'base64url'}
+                                    onChange=${async () => {
+                                        genEncoding.value = 'base64url'
+                                        await updatePublicKeyEncoding()
+                                    }}
+                                />
+                                Base64URL
+                            </label>
+                            <label class="radio-label">
+                                <input
+                                    type="radio"
+                                    name="gen-encoding"
+                                    value="base58"
+                                    checked=${genEncoding.value === 'base58'}
+                                    onChange=${async () => {
+                                        genEncoding.value = 'base58'
+                                        await updatePublicKeyEncoding()
+                                    }}
+                                />
+                                Base58
+                            </label>
+                        </div>
                     </div>
 
                     <div class="key-display">
@@ -269,8 +312,53 @@ export const RSARoute:FunctionComponent = function RSARoute () {
                     </button>
 
                     ${genSignature.value && html`
+                        <div class="form-group">
+                            <label>Signature Encoding:</label>
+                            <div class="radio-group">
+                                <label class="radio-label">
+                                    <input
+                                        type="radio"
+                                        name="gen-sig-encoding"
+                                        value="base64"
+                                        checked=${genSigEncoding.value === 'base64'}
+                                        onChange=${async () => {
+                                            genSigEncoding.value = 'base64'
+                                            await updateSignatureEncoding()
+                                        }}
+                                    />
+                                    Base64
+                                </label>
+                                <label class="radio-label">
+                                    <input
+                                        type="radio"
+                                        name="gen-sig-encoding"
+                                        value="base64url"
+                                        checked=${genSigEncoding.value === 'base64url'}
+                                        onChange=${async () => {
+                                            genSigEncoding.value = 'base64url'
+                                            await updateSignatureEncoding()
+                                        }}
+                                    />
+                                    Base64URL
+                                </label>
+                                <label class="radio-label">
+                                    <input
+                                        type="radio"
+                                        name="gen-sig-encoding"
+                                        value="base58"
+                                        checked=${genSigEncoding.value === 'base58'}
+                                        onChange=${async () => {
+                                            genSigEncoding.value = 'base58'
+                                            await updateSignatureEncoding()
+                                        }}
+                                    />
+                                    Base58
+                                </label>
+                            </div>
+                        </div>
+
                         <div class="key-display">
-                            <label>Signature (${genEncoding.value}):</label>
+                            <label>Signature (${genSigEncoding.value}):</label>
                             <div class="output-field">
                                 <div class="output-content">${genSignature.value}</div>
                                 <copy-button payload=${genSignature.value || 'placeholder'}></copy-button>
