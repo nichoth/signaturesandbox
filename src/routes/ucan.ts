@@ -2,11 +2,14 @@ import { html } from 'htm/preact'
 import { FunctionComponent } from 'preact'
 import { signal } from '@preact/signals'
 import { validate } from '@ucans/ucans'
+import { State } from '../state.js'
 
 const ucanToken = signal('')
 const result = signal<{ valid: boolean, error?: string, details?: any } | null>(null)
 
-export const UCANRoute:FunctionComponent = function UCANRoute () {
+export const UCANRoute:FunctionComponent<{
+    state:ReturnType<typeof State>;
+}> = function UCANRoute () {
     async function handleVerify (ev:Event) {
         ev.preventDefault()
         result.value = null

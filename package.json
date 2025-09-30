@@ -21,13 +21,14 @@
     "@substrate-system/a11y": "^0.0.13",
     "@substrate-system/copy-button": "^0.5.16",
     "@substrate-system/css-normalize": "^0.0.13",
-    "@substrate-system/keys": "^0.2.16",
+    "@substrate-system/keys": "^0.2.20",
     "@substrate-system/routes": "^5.0.2",
     "@ucans/ucans": "^0.12.0",
     "htm": "^3.1.1",
     "ky": "^1.7.5",
     "preact": "^10.26.4",
-    "route-event": "^7.1.1"
+    "route-event": "^7.1.1",
+    "uint8arrays": "^5.1.0"
   },
   "devDependencies": {
     "@netlify/functions": "^4.2.6",
