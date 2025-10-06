@@ -3,15 +3,24 @@ import { FunctionComponent } from 'preact'
 import { useCallback } from 'preact/hooks'
 import { type DID } from '@substrate-system/keys'
 import { verify, publicKeyToDid } from '@substrate-system/keys/crypto'
-import { fromString, toString } from 'uint8arrays'
+// import { fromString, toString } from 'uint8arrays'
+import * as u8 from 'uint8arrays'
 import Debug from '@substrate-system/debug'
 import { State, type Uint8Encodings } from '../state.js'
-import { useComputed } from '@preact/signals'
+import { useComputed, useSignal } from '@preact/signals'
+import { EccKeys } from '@substrate-system/keys/ecc'
+import { RsaKeys } from '@substrate-system/keys/rsa'
 import '@substrate-system/copy-button'
 
 const debug = Debug(import.meta.env.DEV)
+const { toString, fromString } = u8
 
 type KeyType = 'ecc'|'rsa'
+
+// @ts-expect-error dev
+window.verify = verify
+// @ts-expect-error dev
+window.u8 = u8
 
 export const SignatureRoute:FunctionComponent<{
     state:ReturnType<typeof State>;
@@ -19,6 +28,15 @@ export const SignatureRoute:FunctionComponent<{
     title:string;
 }> = function SignatureRoute ({ state, keyType, title }) {
     debug('rendering...', state, keyType)
+
+    // ${state.encodedPublicKeys.value?.[state.encodings.publicKey.value] || ''}
+    const encodedValue = useComputed<string>(() => {
+        return state.encodedPublicKeys.value?.[state.encodings.publicKey.value] || ''
+    })
+
+    const showImportForm = useSignal<boolean>(false)
+    const importPrivateKey = useSignal<string>('')
+    const importEncoding = useSignal<Uint8Encodings>('base64pad')
 
     const sigString = useComputed<string|null>(() => {
         if (!state.generator.signatureBytes.value) return null
@@ -76,16 +94,126 @@ export const SignatureRoute:FunctionComponent<{
         }
     }, [state])
 
+    const handleImportEncodingChange = useCallback((ev:Event) => {
+        const target = ev.target as HTMLInputElement
+        if (target.type === 'radio' && target.checked) {
+            importEncoding.value = target.value as Uint8Encodings
+        }
+    }, [])
+
+    const handleImportPrivateKey = useCallback(async (ev:SubmitEvent) => {
+        ev.preventDefault()
+        const form = ev.target as HTMLFormElement
+        const privateKeyStr = form.elements['privateKey'].value.trim()
+
+        try {
+            // Convert private key from the selected encoding to bytes
+            const privateKeyBytes = fromString(
+                privateKeyStr,
+                importEncoding.value
+            ) as Uint8Array<ArrayBuffer>
+
+            // Import based on key type
+            if (keyType === 'ecc') {
+                const privateKey = await crypto.subtle.importKey(
+                    'raw',
+                    privateKeyBytes,
+                    { name: 'Ed25519' },
+                    true,
+                    ['sign']
+                )
+
+                // Derive the public key
+                const jwk = await crypto.subtle.exportKey('jwk', privateKey)
+                if (!jwk.x) throw new Error('Failed to export public key')
+
+                const publicKeyBytes = fromString(
+                    jwk.x,
+                    state.encodings.publicKey.value
+                ) as Uint8Array<ArrayBuffer>
+
+                // Create keypair
+                const keypair = {
+                    privateKey,
+                    publicKey: await crypto.subtle.importKey(
+                        'raw',
+                        publicKeyBytes,
+                        { name: 'Ed25519' },
+                        true,
+                        ['verify']
+                    )
+                }
+
+                const keys = await EccKeys.create(true, true, { writeKeys: keypair })
+                const json = await keys.toJson('base64')
+
+                state.eccKeys.value = keys
+                state.did.value = json.DID
+            } else {
+                // For RSA, import as PKCS8
+                const privateKey = await crypto.subtle.importKey(
+                    'pkcs8',
+                    privateKeyBytes,
+                    {
+                        name: 'RSA-PSS',
+                        hash: 'SHA-256'
+                    },
+                    true,
+                    ['sign']
+                )
+
+                // Export public key
+                const jwk = await crypto.subtle.exportKey('jwk', privateKey)
+                const publicJwk = {
+                    kty: jwk.kty,
+                    n: jwk.n,
+                    e: jwk.e,
+                    alg: jwk.alg,
+                    ext: true
+                }
+
+                const publicKey = await crypto.subtle.importKey(
+                    'jwk',
+                    publicJwk,
+                    {
+                        name: 'RSA-PSS',
+                        hash: 'SHA-256'
+                    },
+                    true,
+                    ['verify']
+                )
+
+                const keypair = { privateKey, publicKey }
+
+                const keys = await RsaKeys.create(true, true, {
+                    writeKeys: keypair
+                })
+
+                state.rsaKeys.value = keys
+            }
+
+            // Hide the import form after successful import
+            showImportForm.value = false
+            importPrivateKey.value = ''
+        } catch (error) {
+            console.error('Failed to import private key:', error)
+            alert(`Failed to import private key: ${(error as Error).message}`)
+        }
+    }, [keyType])
+
     const handleVerify = useCallback(async (ev:SubmitEvent) => {
         ev.preventDefault()
         state.verifier.result.value = null
+        const form = ev.target as HTMLFormElement
+        const els = form.elements
+        const msg = (els['ver-message'] as HTMLTextAreaElement).value
+        debug('the message', msg)
 
         try {
-            const msgStr = state.verifier.message.value
             const sigStr = state.verifier.signature.value.trim()
 
             debug('Verifying signature:', {
-                message: msgStr,
+                message: msg,
                 signature: sigStr,
                 encoding: state.verifier.encoding.value
             })
@@ -94,12 +222,12 @@ export const SignatureRoute:FunctionComponent<{
             const sigBytes = fromString(sigStr, state.verifier.encoding.value)
 
             // Convert back to base64pad string (what ed25519Verify expects)
-            const sigBase64Pad = toString(sigBytes, 'base64pad')
+            // const sigBase64Pad = toString(sigBytes, 'base64pad')
 
-            let didKey:DID
+            let did:DID
             const publicKeyValue = state.verifier.publicKey.value.trim()
             if (publicKeyValue.startsWith('did:key:')) {
-                didKey = publicKeyValue as DID
+                did = publicKeyValue as DID
             } else {
                 const pubKeyBytes = fromString(
                     publicKeyValue,
@@ -107,20 +235,24 @@ export const SignatureRoute:FunctionComponent<{
                 )
                 // Specify 'ed25519' as the key type
                 // (defaults to 'rsa' otherwise)
-                didKey = await publicKeyToDid(pubKeyBytes, 'ed25519')
+                did = await publicKeyToDid(
+                    pubKeyBytes,
+                    keyType === 'ecc' ? 'ed25519' : 'rsa'
+                )
             }
 
             const isValid = await verify({
-                message: msgStr,
-                publicKey: didKey,
-                signature: sigBase64Pad
+                message: msg,
+                did,
+                signature: sigBytes
             })
             state.verifier.result.value = { valid: isValid }
-        } catch (error) {
-            console.error('Verification error:', error)
+        } catch (_err) {
+            const err = _err as Error
+            console.error('Verification error:', err)
             state.verifier.result.value = {
                 valid: false,
-                error: (error as Error).message
+                error: (err as Error).message
             }
         }
     }, [])
@@ -132,7 +264,7 @@ export const SignatureRoute:FunctionComponent<{
 
         <nav>
             <ul>
-                <li><a href="/">← Back to home</a></li>
+                <li><a href="/">${'<'} Back to home</a></li>
             </ul>
         </nav>
 
@@ -143,6 +275,72 @@ export const SignatureRoute:FunctionComponent<{
                 <button class="action-button" onClick=${generateKeys}>
                     Generate ${keyType === 'ecc' ? 'Ed25519' : 'RSA'} Keypair
                 </button>
+
+                <button
+                    class="action-button"
+                    onClick=${() => { showImportForm.value = !showImportForm.value }}
+                >
+                    ${showImportForm.value ? 'Cancel Import' : 'Import Private Key'}
+                </button>
+
+                ${showImportForm.value && html`
+                    <form class="form-group" onSubmit=${handleImportPrivateKey}>
+                        <div class="form-group">
+                            <label>Private Key Encoding:</label>
+                            <div
+                                class="radio-group"
+                                onChange=${handleImportEncodingChange}
+                            >
+                                <label class="radio-label">
+                                    <input
+                                        type="radio"
+                                        name="import-encoding"
+                                        value="base64pad"
+                                        checked=${importEncoding.value === 'base64pad'}
+                                    />
+                                    Base64Pad
+                                </label>
+                                <label class="radio-label">
+                                    <input
+                                        type="radio"
+                                        name="import-encoding"
+                                        value="base64url"
+                                        checked=${importEncoding.value === 'base64url'}
+                                    />
+                                    Base64URL
+                                </label>
+                                <label class="radio-label">
+                                    <input
+                                        type="radio"
+                                        name="import-encoding"
+                                        value="base58btc"
+                                        checked=${importEncoding.value === 'base58btc'}
+                                    />
+                                    Base58
+                                </label>
+                            </div>
+                        </div>
+
+                        <label for="privateKey">
+                            Private Key (${importEncoding.value}):
+                        </label>
+                        <textarea
+                            id="privateKey"
+                            name="privateKey"
+                            required=${true}
+                            value=${importPrivateKey.value}
+                            onInput=${(e:any) => {
+                                importPrivateKey.value = e.target.value
+                            }}
+                            placeholder="Paste your private key here"
+                            rows="4"
+                        ></textarea>
+
+                        <button class="action-button" type="submit">
+                            Import and Derive Public Key
+                        </button>
+                    </form>
+                `}
 
                 ${hasKeys && html`
                     <div class="form-group">
@@ -201,11 +399,29 @@ export const SignatureRoute:FunctionComponent<{
                         </h3>
                         <div class="output-field">
                             <div class="output-content">
-                                ${state.encodedKeys.value?.[state.encodings.publicKey.value] || ''}
+                                ${encodedValue.value}
                             </div>
                             <copy-button
                                 payload=${
-                                    state.encodedKeys.value?.[state.encodings.publicKey.value] ||
+                                    encodedValue.value ||
+                                    'placeholder'
+                                }
+                            >
+                            </copy-button>
+                        </div>
+                    </div>
+
+                    <div class="key-display">
+                        <h3>
+                            Private Key (${state.encodings.publicKey.value}):
+                        </h3>
+                        <div class="output-field">
+                            <div class="output-content">
+                                ${state.encodedPrivateKeys.value?.[state.encodings.publicKey.value] || ''}
+                            </div>
+                            <copy-button
+                                payload=${
+                                    state.encodedPrivateKeys.value?.[state.encodings.publicKey.value] ||
                                     'placeholder'
                                 }
                             >
@@ -273,7 +489,7 @@ export const SignatureRoute:FunctionComponent<{
                     <div class="key-display">
                         <h3>Signature (${state.encodings.signature.value}):</h3>
                         <div class="output-field">
-                            <div for="message" class="output-content">
+                            <div class="output-content">
                                 ${sigString}
                             </div>
                             <copy-button payload=${sigString.value || 'placeholder'}></copy-button>
@@ -320,7 +536,9 @@ export const SignatureRoute:FunctionComponent<{
                     </div>
 
                     <div class="form-group">
-                        <label for="ver-signature">Signature (${state.verifier.encoding.value}):</label>
+                        <label for="ver-signature">
+                            Signature (${state.verifier.encoding.value}):
+                        </label>
                         <textarea
                             id="ver-signature"
                             value=${state.verifier.signature.value}
@@ -334,7 +552,7 @@ export const SignatureRoute:FunctionComponent<{
 
                     <div class="form-group">
                         <label for="ver-publicKey">
-                            Public Key (${state.verifier.encoding.value}) or DID:
+                            DID:
                         </label>
                         <textarea
                             id="ver-publicKey"
@@ -342,7 +560,7 @@ export const SignatureRoute:FunctionComponent<{
                             onInput=${(e:any) => {
                                 state.verifier.publicKey.value = e.target.value
                             }}
-                            placeholder="Enter the public key or DID"
+                            placeholder="The signing DID"
                             rows="3"
                         ></textarea>
                     </div>
@@ -351,16 +569,15 @@ export const SignatureRoute:FunctionComponent<{
                         <label for="ver-message">Message:</label>
                         <textarea
                             id="ver-message"
-                            value=${state.verifier.message.value}
-                            onInput=${(e:any) => {
-                                state.verifier.message.value = e.target.value
-                            }}
+                            name="ver-message"
                             placeholder="Enter the message that was signed"
                             rows="4"
                         ></textarea>
                     </div>
 
-                    <button type="submit" class="verify-button">Verify Signature</button>
+                    <button type="submit" class="verify-button">
+                        Verify Signature
+                    </button>
                 </form>
 
                 ${state.verifier.result.value && html`

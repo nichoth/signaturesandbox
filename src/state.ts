@@ -1,10 +1,10 @@
 import { EccKeys } from '@substrate-system/keys/ecc'
 import { RsaKeys } from '@substrate-system/keys/rsa'
-import { batch, Signal, signal } from '@preact/signals'
-import { type SupportedEncodings } from 'uint8arrays'
+import { batch, Signal, signal, effect } from '@preact/signals'
+import { type SupportedEncodings, toString, fromString } from 'uint8arrays'
 import Route from 'route-event'
-// import Debug from '@substrate-system/debug'
-// const debug = Debug(import.meta.env.DEV)
+import Debug from '@substrate-system/debug'
+const debug = Debug(import.meta.env.DEV)
 
 export type Uint8Encodings = Extract<SupportedEncodings,
     'base64pad'|'base64url'|'base58btc'|'hex'>
@@ -14,7 +14,13 @@ export function State ():{
     eccKeys:Signal<EccKeys|null>;
     rsaKeys:Signal<RsaKeys|null>;
     did:Signal<string>;
-    encodedKeys:Signal<{
+    encodedPublicKeys:Signal<{
+        base64pad:string;
+        base58btc:string;
+        base64url:string;
+        hex:string;
+    }|null>;
+    encodedPrivateKeys:Signal<{
         base64pad:string;
         base58btc:string;
         base64url:string;
@@ -45,7 +51,18 @@ export function State ():{
         rsaKeys: signal<RsaKeys|null>(null),
         did: signal<string>(''),
         route: signal<string>(location.pathname + location.search),
-        encodedKeys: signal(null),
+        encodedPublicKeys: signal<{
+            base64pad:string;
+            base58btc:string;
+            base64url:string;
+            hex:string;
+        }|null>(null),
+        encodedPrivateKeys: signal<{
+            base64pad:string;
+            base58btc:string;
+            base64url:string;
+            hex:string;
+        }|null>(null),
         encodings: {
             publicKey: signal<Uint8Encodings>('base64pad'),
             signature: signal<Uint8Encodings>('base64pad'),
@@ -62,6 +79,66 @@ export function State ():{
             result: signal<{ valid:boolean, error?:string }|null>(null),
         }
     }
+
+    /**
+     * Automatically set the encoded keys when the keys change
+     */
+    effect(() => {
+        if (!state.eccKeys.value && !state.rsaKeys.value) return
+
+        (async () => {
+            if (state.eccKeys.value) {
+                const keys = state.eccKeys.value
+                state.encodedPublicKeys.value = {
+                    base58btc: await keys.publicWriteKey.asString('base58btc'),
+                    base64pad: await keys.publicWriteKey.asString('base64pad'),
+                    base64url: await keys.publicWriteKey.asString('base64url'),
+                    hex: await keys.publicWriteKey.asString('hex')
+                }
+
+                // Export private key as Uint8Array
+                const privateKeyJwk = await crypto.subtle.exportKey(
+                    'jwk',
+                    keys.writeKey.privateKey
+                )
+                if (!privateKeyJwk.d) {
+                    throw new Error('Failed to export private key')
+                }
+
+                const privateKeyBytes = fromString(privateKeyJwk.d, 'base64url')
+
+                state.encodedPrivateKeys.value = {
+                    base64pad: toString(privateKeyBytes, 'base64pad'),
+                    base64url: toString(privateKeyBytes, 'base64url'),
+                    base58btc: toString(privateKeyBytes, 'base58btc'),
+                    hex: toString(privateKeyBytes, 'hex')
+                }
+            } else if (state.rsaKeys.value) {
+                const keys = state.rsaKeys.value
+                state.encodedPublicKeys.value = {
+                    base58btc: await keys.publicWriteKey.asString('base58btc'),
+                    base64pad: await keys.publicWriteKey.asString('base64pad'),
+                    base64url: await keys.publicWriteKey.asString('base64url'),
+                    hex: await keys.publicWriteKey.asString('hex')
+                }
+
+                // Export private key as Uint8Array
+                const { toString } = await import('uint8arrays')
+                const privateKeyPkcs8 = await crypto.subtle.exportKey(
+                    'pkcs8',
+                    keys.writeKey.privateKey
+                )
+                const privateKeyBytes = new Uint8Array(privateKeyPkcs8)
+
+                state.encodedPrivateKeys.value = {
+                    base64pad: toString(privateKeyBytes, 'base64pad'),
+                    base64url: toString(privateKeyBytes, 'base64url'),
+                    base58btc: toString(privateKeyBytes, 'base58btc'),
+                    hex: toString(privateKeyBytes, 'hex')
+                }
+            }
+        })()
+    })
 
     /**
      * set the app state to match the browser URL
@@ -123,17 +200,12 @@ State.generateEcc = async function (
     state:ReturnType<typeof State>
 ):Promise<EccKeys> {
     const keys = await EccKeys.create(true, true)
-    const json = await keys.toJson('base64')
+
+    debug('the keys...', keys)
 
     batch(async () => {
         state.eccKeys.value = keys
-        state.did.value = json.DID
-        state.encodedKeys.value = {
-            base58btc: await keys.publicWriteKey.asString('base58btc'),
-            base64pad: await keys.publicWriteKey.asString('base64pad'),
-            base64url: await keys.publicWriteKey.asString('base64url'),
-            hex: await keys.publicWriteKey.asString('hex')
-        }
+        state.did.value = keys.DID
     })
 
     return keys
@@ -143,17 +215,11 @@ State.generateRsa = async function (
     state:ReturnType<typeof State>
 ):Promise<RsaKeys> {
     const keys = await RsaKeys.create(true, true)
-    const json = await keys.toJson('base64')
+    const did = keys.DID
 
     batch(async () => {
         state.rsaKeys.value = keys
-        state.did.value = json.DID
-        state.encodedKeys.value = {
-            base58btc: await keys.publicWriteKey.asString('base58btc'),
-            base64pad: await keys.publicWriteKey.asString('base64pad'),
-            base64url: await keys.publicWriteKey.asString('base64url'),
-            hex: await keys.publicWriteKey.asString('hex')
-        }
+        state.did.value = did
     })
 
     return keys

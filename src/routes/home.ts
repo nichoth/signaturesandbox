@@ -8,7 +8,13 @@ export const HomeRoute:FunctionComponent = function HomeRoute () {
 
         <p>
             At last${ELLIPSIS} a place to cryptographically sign
-            arbitrary string${ELLIPSIS}
+            arbitrary strings${ELLIPSIS}
+        </p>
+
+        <p>
+            This uses the <a href="https://developer.mozilla.org/en-US/docs/Web/API/Web_Crypto_API">
+            Web Crypto API</a> to sign and verify things in your browser;
+            no servers required.
         </p>
 
         <nav class="signature-nav">
