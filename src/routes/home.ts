@@ -1,9 +1,15 @@
 import { html } from 'htm/preact'
 import { FunctionComponent } from 'preact'
+import { ELLIPSIS } from '../constants.js'
 
 export const HomeRoute:FunctionComponent = function HomeRoute () {
     return html`<div class="route home">
-        <h1>Signature Verification</h1>
+        <h1>Signature Sandbox</h1>
+
+        <p>
+            At last${ELLIPSIS} a place to cryptographically sign
+            arbitrary string${ELLIPSIS}
+        </p>
 
         <nav class="signature-nav">
             <ul>

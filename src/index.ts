@@ -1,6 +1,5 @@
 import { html } from 'htm/preact'
 import { FunctionComponent, render } from 'preact'
-import { createDebug } from '@substrate-system/debug'
 import { State } from './state.js'
 import Router from './routes/index.js'
 import '@substrate-system/copy-button'
@@ -11,7 +10,6 @@ import '@substrate-system/css-normalize'
 
 const router = Router()
 const state = State()
-const debug = createDebug()
 
 if (import.meta.env.DEV || import.meta.env.MODE === 'staging') {
     // @ts-expect-error DEV env
@@ -19,7 +17,6 @@ if (import.meta.env.DEV || import.meta.env.MODE === 'staging') {
 }
 
 export const App:FunctionComponent = function App () {
-    debug('rendering app...')
     const match = router.match(state.route.value)
 
     if (!match || !match.action) {
