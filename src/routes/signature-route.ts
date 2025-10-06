@@ -138,7 +138,7 @@ export const SignatureRoute:FunctionComponent<{
 
         <div class="two-column-layout">
             <div class="col-half">
-                <h2>Generator</h2>
+                <h2>Keys</h2>
 
                 <button class="action-button" onClick=${generateKeys}>
                     Generate ${keyType === 'ecc' ? 'Ed25519' : 'RSA'} Keypair
