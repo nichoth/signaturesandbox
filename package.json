@@ -10,7 +10,6 @@
     "start": "concurrently --kill-others \"npx ntl functions:serve --port=9999 --debug\" \"npx vite\"",
     "preversion": "npm run lint",
     "version": "auto-changelog --template keepachangelog --breaking-pattern 'BREAKING CHANGE' && git add CHANGELOG.md",
-    "preinstall": "node ./scripts/prune-netlify-deps.mjs",
     "postversion": "git push --follow-tags",
     "prepublishOnly": "npm run build"
   },
