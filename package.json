@@ -4,12 +4,13 @@
   "version": "0.0.0",
   "main": "public/index.js",
   "scripts": {
-    "lint": "eslint \"./**/*.{ts,js}\"",
+    "lint": "eslint \"./**/*.{ts,js,mjs}\"",
     "test": "npm run lint && npm run build",
     "build": "mkdir -p ./public && rm -rf ./public/* && vite build",
     "start": "concurrently --kill-others \"npx ntl functions:serve --port=9999 --debug\" \"npx vite\"",
     "preversion": "npm run lint",
     "version": "auto-changelog --template keepachangelog --breaking-pattern 'BREAKING CHANGE' && git add CHANGELOG.md",
+    "preinstall": "node ./scripts/prune-netlify-deps.mjs",
     "postversion": "git push --follow-tags",
     "prepublishOnly": "npm run build"
   },
