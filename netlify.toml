@@ -24,7 +24,13 @@
   node_bundler = "esbuild"
 
 [build]
-  command = "npm install && npm run build"
-  environment = { NODE_VERSION = '22' }
+  command = "npm ci && npm run build"
   functions = "netlify/functions"
   publish = "public"
+
+[build.environment]
+  NODE_VERSION = '22'
+  # npm v9+ prefers --omit=optional. Older npm uses --no-optional.
+  NPM_FLAGS = "--omit=optional"
+  # Also prevent Playwright from trying any browser downloads if something else brings it in
+  PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD = "1"
