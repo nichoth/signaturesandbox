@@ -3,7 +3,6 @@ import { FunctionComponent } from 'preact'
 import { useCallback } from 'preact/hooks'
 import { type DID } from '@substrate-system/keys'
 import { verify, publicKeyToDid } from '@substrate-system/keys/crypto'
-// import { fromString, toString } from 'uint8arrays'
 import * as u8 from 'uint8arrays'
 import Debug from '@substrate-system/debug'
 import { State, type Uint8Encodings } from '../state.js'
@@ -29,7 +28,6 @@ export const SignatureRoute:FunctionComponent<{
 }> = function SignatureRoute ({ state, keyType, title }) {
     debug('rendering...', state, keyType)
 
-    // ${state.encodedPublicKeys.value?.[state.encodings.publicKey.value] || ''}
     const encodedValue = useComputed<string>(() => {
         return state.encodedPublicKeys.value?.[state.encodings.publicKey.value] || ''
     })
