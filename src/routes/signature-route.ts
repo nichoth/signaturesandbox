@@ -87,9 +87,7 @@ export const SignatureRoute:FunctionComponent<{
 
     const handleVerifierEncodingChange = useCallback((ev:Event) => {
         const target = ev.target as HTMLInputElement
-        if (target.type === 'radio' && target.checked) {
-            State.setVerifierEncoding(state, target.value as Uint8Encodings)
-        }
+        State.setVerifierEncoding(state, target.value as Uint8Encodings)
     }, [state])
 
     const handleImportEncodingChange = useCallback((ev:Event) => {
@@ -342,7 +340,7 @@ export const SignatureRoute:FunctionComponent<{
 
                 ${hasKeys && html`
                     <div class="form-group">
-                        <label>Public Key Encoding:</label>
+                        <h3>Public Key Encoding:</h3>
                         <div
                             class="radio-group"
                             onChange=${handlePublicKeyEncodingChange}
@@ -376,6 +374,16 @@ export const SignatureRoute:FunctionComponent<{
                                         'base58btc'}
                                 />
                                 Base58
+                            </label>
+                            <label class="radio-label">
+                                <input
+                                    type="radio"
+                                    name="gen-encoding"
+                                    value="hex"
+                                    checked=${state.encodings.publicKey.value ===
+                                        'hex'}
+                                />
+                                Hex
                             </label>
                         </div>
                     </div>
@@ -481,6 +489,16 @@ export const SignatureRoute:FunctionComponent<{
                                 />
                                 Base58
                             </label>
+                            <label class="radio-label">
+                                <input
+                                    type="radio"
+                                    name="gen-sig-encoding"
+                                    value="hex"
+                                    checked=${state.encodings.signature.value ===
+                                        'hex'}
+                                />
+                                Hex
+                            </label>
                         </div>
                     </div>
 
@@ -501,7 +519,7 @@ export const SignatureRoute:FunctionComponent<{
 
                 <form onSubmit=${handleVerify} class="verification-form">
                     <div class="form-group">
-                        <label>Encoding:</label>
+                        <h3>Encoding:</h3>
                         <div class="radio-group" onChange=${handleVerifierEncodingChange}>
                             <label class="radio-label">
                                 <input
@@ -530,6 +548,15 @@ export const SignatureRoute:FunctionComponent<{
                                 />
                                 Base58
                             </label>
+                            <label class="radio-label">
+                                <input
+                                    type="radio"
+                                    name="ver-encoding"
+                                    value="hex"
+                                    checked=${state.verifier.encoding.value === 'hex'}
+                                />
+                                Hex
+                            </label>
                         </div>
                     </div>
 
@@ -550,7 +577,7 @@ export const SignatureRoute:FunctionComponent<{
 
                     <div class="form-group">
                         <label for="ver-publicKey">
-                            DID:
+                            DID or public key (${state.verifier.encoding.value}):
                         </label>
                         <textarea
                             id="ver-publicKey"
@@ -558,7 +585,7 @@ export const SignatureRoute:FunctionComponent<{
                             onInput=${(e:any) => {
                                 state.verifier.publicKey.value = e.target.value
                             }}
-                            placeholder="The signing DID"
+                            placeholder="Enter DID or public key"
                             rows="3"
                         ></textarea>
                     </div>
