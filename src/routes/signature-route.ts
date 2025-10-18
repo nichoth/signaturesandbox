@@ -28,7 +28,6 @@ export const SignatureRoute:FunctionComponent<{
     title:string;
 }> = function SignatureRoute ({ state, keyType, title }) {
     debug('rendering...', state)
-    debug('App state is referenced at `window.state`')
 
     const encodedValue = useComputed<string>(() => {
         return state.encodedPublicKeys.value?.[state.encodings.publicKey.value] || ''
