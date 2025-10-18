@@ -11,7 +11,7 @@ import '@substrate-system/css-normalize'
 const router = Router()
 const state = State()
 
-if (import.meta.env.DEV || import.meta.env.MODE === 'staging') {
+if (import.meta.env.DEV || import.meta.env.MODE !== 'production') {
     // @ts-expect-error DEV env
     window.state = state
 }
