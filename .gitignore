@@ -8,3 +8,7 @@ public
 .netlify
 notes
 .claude
+test-results
+playwright-report
+test/*-snapshots
+
