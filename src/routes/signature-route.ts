@@ -5,13 +5,14 @@ import { type DID } from '@substrate-system/keys'
 import { verify, publicKeyToDid } from '@substrate-system/keys/crypto'
 import * as u8 from 'uint8arrays'
 import Debug from '@substrate-system/debug'
-import { State, type Uint8Encodings } from '../state.js'
 import { useComputed, useSignal } from '@preact/signals'
 import { EccKeys } from '@substrate-system/keys/ecc'
 import { RsaKeys } from '@substrate-system/keys/rsa'
 import '@substrate-system/copy-button'
+import { State, type Uint8Encodings } from '../state.js'
+import { isDev } from '../util.js'
 
-const debug = Debug(import.meta.env.DEV)
+const debug = Debug(isDev())
 const { toString, fromString } = u8
 
 type KeyType = 'ecc'|'rsa'

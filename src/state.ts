@@ -4,7 +4,8 @@ import { batch, Signal, signal, effect } from '@preact/signals'
 import { type SupportedEncodings, toString, fromString } from 'uint8arrays'
 import Route from 'route-event'
 import Debug from '@substrate-system/debug'
-const debug = Debug(import.meta.env.DEV)
+import { isDev } from './util.js'
+const debug = Debug(isDev())
 
 export type Uint8Encodings = Extract<SupportedEncodings,
     'base64pad'|'base64url'|'base58btc'|'hex'>
