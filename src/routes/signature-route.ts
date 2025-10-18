@@ -264,6 +264,10 @@ export const SignatureRoute:FunctionComponent<{
     return html`<div class="route ${keyType}-route">
         <h1>${title}</h1>
 
+        <p>
+            Application state is at <code>window.state</code>.
+        </p>
+
         <nav>
             <ul>
                 <li><a href="/">${'<'} Back to home</a></li>
