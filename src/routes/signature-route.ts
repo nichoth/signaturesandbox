@@ -36,6 +36,11 @@ export const SignatureRoute:FunctionComponent<{
     const importPrivateKey = useSignal<string>('')
     const importEncoding = useSignal<Uint8Encodings>('base64pad')
 
+    const importKey = useCallback((ev:MouseEvent) => {
+        ev.preventDefault()
+        showImportForm.value = !showImportForm.value
+    }, [])
+
     const sigString = useComputed<string|null>(() => {
         if (!state.generator.signatureBytes.value) return null
 
@@ -268,13 +273,16 @@ export const SignatureRoute:FunctionComponent<{
             <div class="col-half">
                 <h2>Keys</h2>
 
-                <button class="action-button" onClick=${generateKeys}>
-                    Generate ${keyType === 'ecc' ? 'Ed25519' : 'RSA'} Keypair
-                </button>
+                ${showImportForm.value ?
+                    null :
+                    html`<button class="action-button" onClick=${generateKeys}>
+                        Generate ${keyType === 'ecc' ? 'Ed25519' : 'RSA'} Keypair
+                    </button>`
+                }
 
                 <button
                     class="action-button"
-                    onClick=${() => { showImportForm.value = !showImportForm.value }}
+                    onClick=${importKey}
                 >
                     ${showImportForm.value ? 'Cancel Import' : 'Import Private Key'}
                 </button>
