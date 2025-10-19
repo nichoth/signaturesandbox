@@ -6,10 +6,12 @@
 
 A playground for signatures and things.
 
+Plus, [see the test report](https://nichoth.github.io/signaturesandbox/).
+
 ## test
 
-Run some tests locally. This uses `@axe-core/playwright` and playwright
-for tests.
+Run some tests locally. This uses [`@axe-core/playwright`](https://www.npmjs.com/package/@axe-core/playwright)
+and playwright for tests.
 
 ### Test Screenshots & a11y
 
