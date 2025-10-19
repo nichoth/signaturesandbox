@@ -33,7 +33,6 @@ jobs:
           name: playwright-report
           path: |
             playwright-report/
-            test-results/
           retention-days: 30
 
   deploy:
