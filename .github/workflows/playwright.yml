@@ -21,8 +21,6 @@ jobs:
         with: { node-version: 22 }
       - run: npm ci
       - run: npx playwright install --with-deps
-      - name: Start app
-        run: npm run start & npx wait-on http://localhost:5173
       - name: Run tests
         run: npx playwright test
         continue-on-error: true
