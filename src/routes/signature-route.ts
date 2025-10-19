@@ -531,7 +531,7 @@ export const SignatureRoute:FunctionComponent<{
                 <h2>Verifier</h2>
 
                 <form onSubmit=${handleVerify} class="verification-form">
-                    <div class="form-group">
+                    <div class="form-group encoding">
                         <h3>Encoding:</h3>
                         <div class="radio-group" onChange=${handleVerifierEncodingChange}>
                             <label class="radio-label">

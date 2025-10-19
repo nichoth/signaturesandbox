@@ -4,6 +4,27 @@
 
 A playground for signatures and things.
 
+## test
+
+Run some tests locally. This uses `@axe-core/playwright` and playwright
+for tests.
+
+### Test Screenshots & a11y
+
+```sh
+npm test
+```
+
+### Create New Screenshots
+
+If you changed the visual design of the page, this will generate new
+screenshots before running the tests.
+
+```sh
+npm run test:e2e:update
+```
+
+
 ## develop
 
 ```

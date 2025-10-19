@@ -10,5 +10,3 @@ notes
 .claude
 test-results
 playwright-report
-test/*-snapshots
-
