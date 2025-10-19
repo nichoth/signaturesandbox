@@ -1,7 +1,7 @@
 # Signature Sandbox
 
 [![Netlify Status](https://api.netlify.com/api/v1/badges/8c0fa564-8d54-404e-96e1-635ccc11e734/deploy-status)](https://app.netlify.com/projects/signaturesandbox/deploys)
-[![tests](https://img.shields.io/github/actions/workflow/status/nichoth/signaturesandbox/nodejs.yml?style=flat-square)](https://github.com/nichoth/signaturesandbox/actions/workflows/playwright.yml)
+[![tests](https://img.shields.io/github/actions/workflow/status/nichoth/signaturesandbox/playwright.yml?style=flat-square)](https://github.com/nichoth/signaturesandbox/actions/workflows/playwright.yml)
 
 
 A playground for signatures and things.
