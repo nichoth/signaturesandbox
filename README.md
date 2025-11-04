@@ -6,14 +6,23 @@
 
 A playground for signatures and things.
 
-## test
+## Develop
+
+Start a localhost server.
+
+```sh
+npm start
+```
+
+
+## Test
 
 Run some tests locally. This uses [`@axe-core/playwright`](https://www.npmjs.com/package/@axe-core/playwright)
 and playwright for tests.
 
 Plus, [see the test report](https://nichoth.github.io/signaturesandbox/).
 
-### Test Screenshots & a11y
+### Test Screenshots & Accessibility
 
 ```sh
 npm test
@@ -28,9 +37,3 @@ screenshots before running the tests.
 npm run test:e2e:update
 ```
 
-
-## develop
-
-```
-npm start
-```
