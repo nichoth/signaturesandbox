@@ -22,12 +22,13 @@
     "prepublishOnly": "npm run build"
   },
   "dependencies": {
+    "@atcute/multibase": "^1.1.6",
     "@nichoth/components": "^0.16.16",
     "@preact/signals": "^2.0.1",
     "@substrate-system/a11y": "^0.0.13",
     "@substrate-system/copy-button": "^0.5.16",
     "@substrate-system/css-normalize": "^0.0.13",
-    "@substrate-system/keys": "^0.2.27",
+    "@substrate-system/keys": "^0.2.40",
     "@substrate-system/routes": "^5.0.2",
     "@ucans/ucans": "^0.12.0",
     "htm": "^3.1.1",

@@ -11,6 +11,12 @@ import { RsaKeys } from '@substrate-system/keys/rsa'
 import '@substrate-system/copy-button'
 import { State, type Uint8Encodings } from '../state.js'
 import { isDev } from '../util.js'
+import {
+    toBase64Pad,
+    toBase64Url,
+    toBase58Btc,
+    toBase16
+} from '@atcute/multibase'
 
 const debug = Debug(isDev())
 const { toString, fromString } = u8
@@ -30,7 +36,51 @@ export const SignatureRoute:FunctionComponent<{
     debug('rendering...', state)
 
     const encodedValue = useComputed<string>(() => {
-        return state.encodedPublicKeys.value?.[state.encodings.publicKey.value] || ''
+        const baseEncoded = state.encodedPublicKeys.value?.[state.encodings.publicKey.value] || ''
+
+        if (!state.encodings.useMultibase.value || !baseEncoded) {
+            return baseEncoded
+        }
+
+        // Convert to multibase encoding with prefix
+        const bytes = fromString(baseEncoded, state.encodings.publicKey.value)
+
+        switch (state.encodings.publicKey.value) {
+            case 'base64pad':
+                return 'M' + toBase64Pad(bytes)
+            case 'base64url':
+                return 'U' + toBase64Url(bytes)
+            case 'base58btc':
+                return 'z' + toBase58Btc(bytes)
+            case 'hex':
+                return 'f' + toBase16(bytes)
+            default:
+                return baseEncoded
+        }
+    })
+
+    const encodedPrivateKeyValue = useComputed<string>(() => {
+        const baseEncoded = state.encodedPrivateKeys.value?.[state.encodings.publicKey.value] || ''
+
+        if (!state.encodings.useMultibase.value || !baseEncoded) {
+            return baseEncoded
+        }
+
+        // Convert to multibase encoding with prefix
+        const bytes = fromString(baseEncoded, state.encodings.publicKey.value)
+
+        switch (state.encodings.publicKey.value) {
+            case 'base64pad':
+                return 'M' + toBase64Pad(bytes)
+            case 'base64url':
+                return 'U' + toBase64Url(bytes)
+            case 'base58btc':
+                return 'z' + toBase58Btc(bytes)
+            case 'hex':
+                return 'f' + toBase16(bytes)
+            default:
+                return baseEncoded
+        }
     })
 
     const showImportForm = useSignal<boolean>(false)
@@ -45,10 +95,30 @@ export const SignatureRoute:FunctionComponent<{
     const sigString = useComputed<string|null>(() => {
         if (!state.generator.signatureBytes.value) return null
 
-        return toString(
+        const baseEncoded = toString(
             state.generator.signatureBytes.value,
             state.encodings.signature.value
         )
+
+        if (!state.encodings.useMultibase.value) {
+            return baseEncoded
+        }
+
+        // Convert to multibase encoding with prefix
+        const bytes = state.generator.signatureBytes.value
+
+        switch (state.encodings.signature.value) {
+            case 'base64pad':
+                return 'M' + toBase64Pad(bytes)
+            case 'base64url':
+                return 'U' + toBase64Url(bytes)
+            case 'base58btc':
+                return 'z' + toBase58Btc(bytes)
+            case 'hex':
+                return 'f' + toBase16(bytes)
+            default:
+                return baseEncoded
+        }
     })
 
     const generateKeys = useCallback(async () => {
@@ -80,8 +150,14 @@ export const SignatureRoute:FunctionComponent<{
     const handlePublicKeyEncodingChange = useCallback((ev:Event) => {
         const target = ev.target as HTMLInputElement
         if (target.type === 'radio' && target.checked) {
+            debug('target value...', target.value)
             State.setPublicKeyEncoding(state, target.value as Uint8Encodings)
         }
+    }, [state])
+
+    const handleMultibaseChange = useCallback((ev:Event) => {
+        const target = ev.target as HTMLInputElement
+        state.encodings.useMultibase.value = target.checked
     }, [state])
 
     const handleSignatureEncodingChange = useCallback((ev:Event) => {
@@ -274,6 +350,29 @@ export const SignatureRoute:FunctionComponent<{
             </ul>
         </nav>
 
+        <div class="multibase-control">
+            <label class="checkbox-label">
+                <input
+                    type="checkbox"
+                    id="multibase-checkbox"
+                    checked=${state.encodings.useMultibase.value}
+                    onChange=${handleMultibaseChange}
+                    aria-describedby="multibase-description"
+                />
+                Multibase
+            </label>
+            <p
+                id="multibase-description"
+                class="checkbox-description"
+            >
+                When enabled, adds a multibase prefix to all encoded strings.
+                Multibase is a self-describing encoding format that includes a
+                prefix character indicating which encoding is used
+                (e.g., 'M' for base64pad, 'U' for base64url,
+                'z' for base58btc, 'f' for hex).
+            </p>
+        </div>
+
         <div class="two-column-layout">
             <div class="col-half">
                 <h2>Keys</h2>
@@ -436,11 +535,11 @@ export const SignatureRoute:FunctionComponent<{
                         </h3>
                         <div class="output-field">
                             <div class="output-content">
-                                ${state.encodedPrivateKeys.value?.[state.encodings.publicKey.value] || ''}
+                                ${encodedPrivateKeyValue.value}
                             </div>
                             <copy-button
                                 payload=${
-                                    state.encodedPrivateKeys.value?.[state.encodings.publicKey.value] ||
+                                    encodedPrivateKeyValue.value ||
                                     'placeholder'
                                 }
                             >
@@ -458,12 +557,14 @@ export const SignatureRoute:FunctionComponent<{
                             rows="4"
                         ></textarea>
 
-                        <button
-                            class="action-button"
-                            type="submit"
-                        >
-                            Sign Message
-                        </button>
+                        <div class="controls">
+                            <button
+                                class="action-button"
+                                type="submit"
+                            >
+                                Sign Message
+                            </button>
+                        </div>
                     </form>
 
                     <div class="form-group">
@@ -613,9 +714,12 @@ export const SignatureRoute:FunctionComponent<{
                         ></textarea>
                     </div>
 
-                    <button type="submit" class="verify-button">
-                        Verify Signature
-                    </button>
+                    <div class="controls">
+                        <button type="submit" class="verify-button">
+                            Verify Signature
+                        </button>
+                    </div>
+
                 </form>
 
                 ${state.verifier.result.value && html`

@@ -3,6 +3,11 @@
     --darker-blue: #0052a3;
 }
 
+.controls {
+    text-align: right;
+    margin-top: 1rem;
+}
+
 #root {
     min-height: 100vh;
     display: flex;
@@ -28,6 +33,7 @@ button {
 
 p {
     margin-bottom: 1rem;
+    line-height: 1.5;
 }
 
 nav {
@@ -37,6 +43,10 @@ nav {
         list-style: none;
         padding: 0;
     }
+}
+
+h3 {
+    margin-top: 1rem;
 }
 
 h3, h4 {
@@ -335,8 +345,9 @@ pre {
         height: 1.15em;
         border: 0.15em solid currentcolor;
         border-radius: 50%;
-        display: grid;
-        place-content: center;
+        display: flex;
+        align-items: center;
+        justify-content: center;
 
         &::before {
             content: "";
@@ -349,6 +360,71 @@ pre {
         }
 
        &:checked::before {
+            appearance: initial;
+            transform: scale(1);
+        }
+    }
+}
+
+.checkbox-container {
+    margin-top: 1rem;
+
+    & .checkbox-description {
+        margin: 0.5rem;
+        font-size: 0.9rem;
+        line-height: 1.5;
+    }
+}
+
+.multibase-control {
+    margin: 2rem auto;
+
+    & .checkbox-description {
+        margin: 1rem 0 auto;
+        max-width: 40rem;
+    }
+}
+
+.checkbox-label {
+    --form-control-color: #4281CB;
+
+    align-items: center;
+    font-weight: 400;
+    cursor: pointer;
+    font-size: 1.4rem;
+    display: grid;
+    grid-template-columns: 1em auto;
+    gap: 0.4em;
+
+    & input {
+        cursor: pointer;
+    }
+
+    & input[type="checkbox"] {
+        appearance: none;
+        background-color: #fff;
+        margin: 0;
+        font: inherit;
+        color: currentcolor;
+        width: 1.15em;
+        height: 1.15em;
+        border: 0.15em solid currentcolor;
+        border-radius: 0.15em;
+        display: grid;
+        place-content: center;
+
+        &::before {
+            content: "";
+            width: 0.65em;
+            height: 0.65em;
+            transform: scale(0);
+            transition: 120ms transform ease-in-out;
+            box-shadow: inset 1em 1em var(--form-control-color);
+            transform-origin: center;
+            clip-path: polygon(14% 44%, 0 65%, 50% 100%, 100% 16%, 80% 0%, 43% 62%);
+        }
+
+        &:checked::before {
             appearance: initial;
             transform: scale(1);
         }

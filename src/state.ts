@@ -32,6 +32,7 @@ export function State ():{
         publicKey:Signal<Uint8Encodings>;
         signature:Signal<Uint8Encodings>;
         verifierInput:Signal<Uint8Encodings>;
+        useMultibase:Signal<boolean>;
     };
     generator:{
         signatureBytes:Signal<Uint8Array|null>;
@@ -68,6 +69,7 @@ export function State ():{
             publicKey: signal<Uint8Encodings>('base64pad'),
             signature: signal<Uint8Encodings>('base64pad'),
             verifierInput: signal<Uint8Encodings>('base64pad'),
+            useMultibase: signal<boolean>(false),
         },
         generator: {
             signatureBytes: signal<Uint8Array|null>(null),
