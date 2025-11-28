@@ -31,7 +31,13 @@ export const App:FunctionComponent = function App () {
 
     return html`<div class="app">
         <${ChildNode} state=${state} />
-    </div>`
+    </div>
+    <footer>
+        Plus, <a href="https://github.com/nichoth/signaturesandbox">
+            see the source code for this page
+        </a>.
+    </footer>
+    `
 }
 
 render(html`<${App} />`, document.getElementById('root')!)

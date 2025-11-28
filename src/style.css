@@ -3,6 +3,20 @@
     --darker-blue: #0052a3;
 }
 
+#root {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+}
+
+footer {
+    margin-top: 1rem;
+    /* box-shadow: 0 2px 4px #0000001a;
+    background-color: white;
+    padding: 4rem 1rem; */
+}
+
 button {
     cursor: pointer;
 
