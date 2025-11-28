@@ -23,6 +23,30 @@ const { toString, fromString } = u8
 
 type KeyType = 'ecc'|'rsa'
 
+/**
+ * Strip multibase prefix from a string and return the encoding type
+ */
+function stripMultibasePrefix (str:string):{
+    encoding:Uint8Encodings;
+    data:string;
+} {
+    const firstChar = str.charAt(0)
+
+    switch (firstChar) {
+        case 'M':
+            return { encoding: 'base64pad', data: str.slice(1) }
+        case 'U':
+            return { encoding: 'base64url', data: str.slice(1) }
+        case 'z':
+            return { encoding: 'base58btc', data: str.slice(1) }
+        case 'f':
+            return { encoding: 'hex', data: str.slice(1) }
+        default:
+            // No multibase prefix, return as-is
+            return { encoding: 'base64pad', data: str }
+    }
+}
+
 // @ts-expect-error dev
 window.verify = verify
 // @ts-expect-error dev
@@ -296,21 +320,21 @@ export const SignatureRoute:FunctionComponent<{
                 encoding: state.verifier.encoding.value
             })
 
-            // Convert signature to bytes from the selected encoding
-            const sigBytes = fromString(sigStr, state.verifier.encoding.value)
+            // Strip multibase prefix if present
+            const { encoding: sigEncoding, data: sigData } = stripMultibasePrefix(sigStr)
 
-            // Convert back to base64pad string (what ed25519Verify expects)
-            // const sigBase64Pad = toString(sigBytes, 'base64pad')
+            // Convert signature to bytes from the detected or selected encoding
+            const sigBytes = fromString(sigData, sigEncoding)
 
             let did:DID
             const publicKeyValue = state.verifier.publicKey.value.trim()
             if (publicKeyValue.startsWith('did:key:')) {
                 did = publicKeyValue as DID
             } else {
-                const pubKeyBytes = fromString(
-                    publicKeyValue,
-                    state.verifier.encoding.value
-                )
+                // Strip multibase prefix if present
+                const { encoding: keyEncoding, data: keyData } = stripMultibasePrefix(publicKeyValue)
+
+                const pubKeyBytes = fromString(keyData, keyEncoding)
                 // Specify 'ed25519' as the key type
                 // (defaults to 'rsa' otherwise)
                 did = await publicKeyToDid(
@@ -509,6 +533,14 @@ export const SignatureRoute:FunctionComponent<{
                             >
                             </copy-button>
                         </div>
+                        <p class="info-text">
+                            A <code>did:key</code> string
+                            is the public key plus a multicodec prefix that
+                            specifies the key type
+                            (e.g., 0xed01 for Ed25519, 0x1205 for RSA),
+                            plust the public key as a base58btc encoded string
+                            with the multibase 'z' prefix.
+                        </p>
                     </div>
 
                     <div class="key-display">
