@@ -329,7 +329,7 @@ pre {
 
 .radio-group {
     display: flex;
-    justify-content: space-around;
+    justify-content: flex-start;
     gap: 0.5rem;
     row-gap: 1rem;
     flex-wrap: wrap;

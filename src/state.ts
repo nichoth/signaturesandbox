@@ -4,11 +4,12 @@ import { batch, Signal, signal, effect } from '@preact/signals'
 import { type SupportedEncodings, toString, fromString } from 'uint8arrays'
 import Route from 'route-event'
 import Debug from '@substrate-system/debug'
+import { encode as encodeMultikey } from '@substrate-system/multikey'
 import { isDev } from './util.js'
 const debug = Debug(isDev())
 
 export type Uint8Encodings = Extract<SupportedEncodings,
-    'base64pad'|'base64url'|'base58btc'|'hex'>
+    'base64pad'|'base64url'|'base58btc'|'hex'>|'multikey'
 
 export function State ():{
     route:Signal<string>;
@@ -20,17 +21,19 @@ export function State ():{
         base58btc:string;
         base64url:string;
         hex:string;
+        multikey:string;
     }|null>;
     encodedPrivateKeys:Signal<{
         base64pad:string;
         base58btc:string;
         base64url:string;
         hex:string;
+        multikey:string;
     }|null>;
     _setRoute:(path:string)=>void;
     encodings:{
         publicKey:Signal<Uint8Encodings>;
-        signature:Signal<Uint8Encodings>;
+        signature:Signal<SupportedEncodings>
         verifierInput:Signal<Uint8Encodings>;
         useMultibase:Signal<boolean>;
     };
@@ -41,7 +44,8 @@ export function State ():{
         message:Signal<string>;
         signature:Signal<string>;
         publicKey:Signal<string>;
-        encoding:Signal<Uint8Encodings>;
+        signatureEncoding:Signal<SupportedEncodings>;
+        publicKeyEncoding:Signal<Uint8Encodings>;
         result:Signal<{ valid: boolean, error?: string } | null>;
     };
 } {  // eslint-disable-line indent
@@ -58,16 +62,18 @@ export function State ():{
             base58btc:string;
             base64url:string;
             hex:string;
+            multikey:string;
         }|null>(null),
         encodedPrivateKeys: signal<{
             base64pad:string;
             base58btc:string;
             base64url:string;
             hex:string;
+            multikey:string;
         }|null>(null),
         encodings: {
             publicKey: signal<Uint8Encodings>('base64pad'),
-            signature: signal<Uint8Encodings>('base64pad'),
+            signature: signal<SupportedEncodings>('base64pad'),
             verifierInput: signal<Uint8Encodings>('base64pad'),
             useMultibase: signal<boolean>(false),
         },
@@ -78,7 +84,8 @@ export function State ():{
             message: signal<string>(''),
             signature: signal<string>(''),
             publicKey: signal<string>(''),
-            encoding: signal<Uint8Encodings>('base64pad'),
+            signatureEncoding: signal<SupportedEncodings>('base64pad'),
+            publicKeyEncoding: signal<Uint8Encodings>('base64pad'),
             result: signal<{ valid:boolean, error?:string }|null>(null),
         }
     }
@@ -92,11 +99,20 @@ export function State ():{
         (async () => {
             if (state.eccKeys.value) {
                 const keys = state.eccKeys.value
+
+                // Export public key as raw bytes
+                const publicKeyArrayBuffer = await crypto.subtle.exportKey(
+                    'raw',
+                    keys.publicWriteKey
+                )
+                const publicKeyBytes = new Uint8Array(publicKeyArrayBuffer)
+
                 state.encodedPublicKeys.value = {
                     base58btc: await keys.publicWriteKey.asString('base58btc'),
                     base64pad: await keys.publicWriteKey.asString('base64pad'),
                     base64url: await keys.publicWriteKey.asString('base64url'),
-                    hex: await keys.publicWriteKey.asString('hex')
+                    hex: await keys.publicWriteKey.asString('hex'),
+                    multikey: encodeMultikey(publicKeyBytes, 'ed25519')
                 }
 
                 // Export private key as Uint8Array
@@ -114,15 +130,25 @@ export function State ():{
                     base64pad: toString(privateKeyBytes, 'base64pad'),
                     base64url: toString(privateKeyBytes, 'base64url'),
                     base58btc: toString(privateKeyBytes, 'base58btc'),
-                    hex: toString(privateKeyBytes, 'hex')
+                    hex: toString(privateKeyBytes, 'hex'),
+                    multikey: encodeMultikey(privateKeyBytes, 'ed25519')
                 }
             } else if (state.rsaKeys.value) {
                 const keys = state.rsaKeys.value
+
+                // Export public key as SPKI format bytes
+                const publicKeyArrayBuffer = await crypto.subtle.exportKey(
+                    'spki',
+                    keys.publicWriteKey
+                )
+                const publicKeyBytes = new Uint8Array(publicKeyArrayBuffer)
+
                 state.encodedPublicKeys.value = {
                     base58btc: await keys.publicWriteKey.asString('base58btc'),
                     base64pad: await keys.publicWriteKey.asString('base64pad'),
                     base64url: await keys.publicWriteKey.asString('base64url'),
-                    hex: await keys.publicWriteKey.asString('hex')
+                    hex: await keys.publicWriteKey.asString('hex'),
+                    multikey: encodeMultikey(publicKeyBytes, 'rsa')
                 }
 
                 // Export private key as Uint8Array
@@ -137,7 +163,8 @@ export function State ():{
                     base64pad: toString(privateKeyBytes, 'base64pad'),
                     base64url: toString(privateKeyBytes, 'base64url'),
                     base58btc: toString(privateKeyBytes, 'base58btc'),
-                    hex: toString(privateKeyBytes, 'hex')
+                    hex: toString(privateKeyBytes, 'hex'),
+                    multikey: encodeMultikey(privateKeyBytes, 'rsa')
                 }
             }
         })()
@@ -167,7 +194,7 @@ export function State ():{
 State.reset = function (state:ReturnType<typeof State>) {
     batch(() => {
         Object.keys(state.verifier).forEach(k => {
-            if (k === 'encoding') {
+            if (k === 'signatureEncoding' || k === 'publicKeyEncoding') {
                 state.verifier[k].value = 'base64pad'
             } else if (k === 'result') {
                 state.verifier[k].value = null
@@ -187,16 +214,23 @@ State.setPublicKeyEncoding = function (
 
 State.setSignatureEncoding = function (
     state:ReturnType<typeof State>,
-    newValue:Uint8Encodings
+    newValue:SupportedEncodings
 ) {
     state.encodings.signature.value = newValue
 }
 
-State.setVerifierEncoding = function (
+State.setVerifierSignatureEncoding = function (
+    state:ReturnType<typeof State>,
+    newValue:SupportedEncodings
+) {
+    state.verifier.signatureEncoding.value = newValue
+}
+
+State.setVerifierPublicKeyEncoding = function (
     state:ReturnType<typeof State>,
     newValue:Uint8Encodings
 ) {
-    state.verifier.encoding.value = newValue
+    state.verifier.publicKeyEncoding.value = newValue
 }
 
 State.generateEcc = async function (

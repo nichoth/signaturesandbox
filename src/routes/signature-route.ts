@@ -4,6 +4,7 @@ import { useCallback } from 'preact/hooks'
 import { type DID } from '@substrate-system/keys'
 import { verify, publicKeyToDid } from '@substrate-system/keys/crypto'
 import * as u8 from 'uint8arrays'
+import { type SupportedEncodings } from 'uint8arrays'
 import Debug from '@substrate-system/debug'
 import { useComputed, useSignal } from '@preact/signals'
 import { EccKeys } from '@substrate-system/keys/ecc'
@@ -17,35 +18,12 @@ import {
     toBase58Btc,
     toBase16
 } from '@atcute/multibase'
+import { decode as decodeMultikey } from '@substrate-system/multikey'
 
 const debug = Debug(isDev())
 const { toString, fromString } = u8
 
 type KeyType = 'ecc'|'rsa'
-
-/**
- * Strip multibase prefix from a string and return the encoding type
- */
-function stripMultibasePrefix (str:string):{
-    encoding:Uint8Encodings;
-    data:string;
-} {
-    const firstChar = str.charAt(0)
-
-    switch (firstChar) {
-        case 'M':
-            return { encoding: 'base64pad', data: str.slice(1) }
-        case 'U':
-            return { encoding: 'base64url', data: str.slice(1) }
-        case 'z':
-            return { encoding: 'base58btc', data: str.slice(1) }
-        case 'f':
-            return { encoding: 'hex', data: str.slice(1) }
-        default:
-            // No multibase prefix, return as-is
-            return { encoding: 'base64pad', data: str }
-    }
-}
 
 // @ts-expect-error dev
 window.verify = verify
@@ -57,10 +35,15 @@ export const SignatureRoute:FunctionComponent<{
     keyType:KeyType;
     title:string;
 }> = function SignatureRoute ({ state, keyType, title }) {
-    debug('rendering...', state)
+    debug('rendering...', keyType)
 
     const encodedValue = useComputed<string>(() => {
         const baseEncoded = state.encodedPublicKeys.value?.[state.encodings.publicKey.value] || ''
+
+        // Multikey format already includes the 'z' prefix, so return as-is
+        if (state.encodings.publicKey.value === 'multikey') {
+            return baseEncoded
+        }
 
         if (!state.encodings.useMultibase.value || !baseEncoded) {
             return baseEncoded
@@ -85,6 +68,11 @@ export const SignatureRoute:FunctionComponent<{
 
     const encodedPrivateKeyValue = useComputed<string>(() => {
         const baseEncoded = state.encodedPrivateKeys.value?.[state.encodings.publicKey.value] || ''
+
+        // Multikey format already includes the 'z' prefix, so return as-is
+        if (state.encodings.publicKey.value === 'multikey') {
+            return baseEncoded
+        }
 
         if (!state.encodings.useMultibase.value || !baseEncoded) {
             return baseEncoded
@@ -187,13 +175,18 @@ export const SignatureRoute:FunctionComponent<{
     const handleSignatureEncodingChange = useCallback((ev:Event) => {
         const target = ev.target as HTMLInputElement
         if (target.type === 'radio' && target.checked) {
-            State.setSignatureEncoding(state, target.value as Uint8Encodings)
+            State.setSignatureEncoding(state, target.value as SupportedEncodings)
         }
     }, [state])
 
-    const handleVerifierEncodingChange = useCallback((ev:Event) => {
+    const handleVerifierSignatureEncodingChange = useCallback((ev:Event) => {
         const target = ev.target as HTMLInputElement
-        State.setVerifierEncoding(state, target.value as Uint8Encodings)
+        State.setVerifierSignatureEncoding(state, target.value as SupportedEncodings)
+    }, [state])
+
+    const handleVerifierPublicKeyEncodingChange = useCallback((ev:Event) => {
+        const target = ev.target as HTMLInputElement
+        State.setVerifierPublicKeyEncoding(state, target.value as Uint8Encodings)
     }, [state])
 
     const handleImportEncodingChange = useCallback((ev:Event) => {
@@ -210,10 +203,18 @@ export const SignatureRoute:FunctionComponent<{
 
         try {
             // Convert private key from the selected encoding to bytes
-            const privateKeyBytes = fromString(
-                privateKeyStr,
-                importEncoding.value
-            ) as Uint8Array<ArrayBuffer>
+            let privateKeyBytes:Uint8Array<ArrayBuffer>
+
+            if (importEncoding.value === 'multikey') {
+                // Decode multikey format
+                const decoded = decodeMultikey(privateKeyStr)
+                privateKeyBytes = decoded.key as Uint8Array<ArrayBuffer>
+            } else {
+                privateKeyBytes = fromString(
+                    privateKeyStr,
+                    importEncoding.value
+                ) as Uint8Array<ArrayBuffer>
+            }
 
             // Import based on key type
             if (keyType === 'ecc') {
@@ -229,9 +230,10 @@ export const SignatureRoute:FunctionComponent<{
                 const jwk = await crypto.subtle.exportKey('jwk', privateKey)
                 if (!jwk.x) throw new Error('Failed to export public key')
 
+                // JWK x parameter is always base64url encoded
                 const publicKeyBytes = fromString(
                     jwk.x,
-                    state.encodings.publicKey.value
+                    'base64url'
                 ) as Uint8Array<ArrayBuffer>
 
                 // Create keypair
@@ -317,24 +319,30 @@ export const SignatureRoute:FunctionComponent<{
             debug('Verifying signature:', {
                 message: msg,
                 signature: sigStr,
-                encoding: state.verifier.encoding.value
+                signatureEncoding: state.verifier.signatureEncoding.value,
+                publicKeyEncoding: state.verifier.publicKeyEncoding.value
             })
 
-            // Strip multibase prefix if present
-            const { encoding: sigEncoding, data: sigData } = stripMultibasePrefix(sigStr)
-
-            // Convert signature to bytes from the detected or selected encoding
-            const sigBytes = fromString(sigData, sigEncoding)
+            // Convert signature to bytes using the selected encoding
+            const sigBytes = fromString(sigStr, state.verifier.signatureEncoding.value)
 
             let did:DID
             const publicKeyValue = state.verifier.publicKey.value.trim()
             if (publicKeyValue.startsWith('did:key:')) {
                 did = publicKeyValue as DID
             } else {
-                // Strip multibase prefix if present
-                const { encoding: keyEncoding, data: keyData } = stripMultibasePrefix(publicKeyValue)
+                let pubKeyBytes:Uint8Array
 
-                const pubKeyBytes = fromString(keyData, keyEncoding)
+                // Check if this is multikey format
+                if (state.verifier.publicKeyEncoding.value === 'multikey') {
+                    // Decode multikey format
+                    const decoded = decodeMultikey(publicKeyValue)
+                    pubKeyBytes = decoded.key
+                } else {
+                    // Use the selected encoding directly
+                    pubKeyBytes = fromString(publicKeyValue, state.verifier.publicKeyEncoding.value)
+                }
+
                 // Specify 'ed25519' as the key type
                 // (defaults to 'rsa' otherwise)
                 did = await publicKeyToDid(
@@ -450,6 +458,15 @@ export const SignatureRoute:FunctionComponent<{
                                     />
                                     Base58
                                 </label>
+                                <label class="radio-label">
+                                    <input
+                                        type="radio"
+                                        name="import-encoding"
+                                        value="multikey"
+                                        checked=${importEncoding.value === 'multikey'}
+                                    />
+                                    Multikey
+                                </label>
                             </div>
                         </div>
 
@@ -520,6 +537,16 @@ export const SignatureRoute:FunctionComponent<{
                                         'hex'}
                                 />
                                 Hex
+                            </label>
+                            <label class="radio-label">
+                                <input
+                                    type="radio"
+                                    name="gen-encoding"
+                                    value="multikey"
+                                    checked=${state.encodings.publicKey.value ===
+                                        'multikey'}
+                                />
+                                Multikey
                             </label>
                         </div>
                     </div>
@@ -665,41 +692,41 @@ export const SignatureRoute:FunctionComponent<{
 
                 <form onSubmit=${handleVerify} class="verification-form">
                     <div class="form-group encoding">
-                        <h3>Encoding:</h3>
-                        <div class="radio-group" onChange=${handleVerifierEncodingChange}>
+                        <h3>Signature Encoding:</h3>
+                        <div class="radio-group" onChange=${handleVerifierSignatureEncodingChange}>
                             <label class="radio-label">
                                 <input
                                     type="radio"
-                                    name="ver-encoding"
+                                    name="ver-sig-encoding"
                                     value="base64pad"
-                                    checked=${state.verifier.encoding.value === 'base64pad'}
+                                    checked=${state.verifier.signatureEncoding.value === 'base64pad'}
                                 />
                                 Base64Pad
                             </label>
                             <label class="radio-label">
                                 <input
                                     type="radio"
-                                    name="ver-encoding"
+                                    name="ver-sig-encoding"
                                     value="base64url"
-                                    checked=${state.verifier.encoding.value === 'base64url'}
+                                    checked=${state.verifier.signatureEncoding.value === 'base64url'}
                                 />
                                 Base64URL
                             </label>
                             <label class="radio-label">
                                 <input
                                     type="radio"
-                                    name="ver-encoding"
+                                    name="ver-sig-encoding"
                                     value="base58btc"
-                                    checked=${state.verifier.encoding.value === 'base58btc'}
+                                    checked=${state.verifier.signatureEncoding.value === 'base58btc'}
                                 />
                                 Base58
                             </label>
                             <label class="radio-label">
                                 <input
                                     type="radio"
-                                    name="ver-encoding"
+                                    name="ver-sig-encoding"
                                     value="hex"
-                                    checked=${state.verifier.encoding.value === 'hex'}
+                                    checked=${state.verifier.signatureEncoding.value === 'hex'}
                                 />
                                 Hex
                             </label>
@@ -708,7 +735,7 @@ export const SignatureRoute:FunctionComponent<{
 
                     <div class="form-group">
                         <label for="ver-signature">
-                            Signature (${state.verifier.encoding.value}):
+                            Signature (${state.verifier.signatureEncoding.value}):
                         </label>
                         <textarea
                             id="ver-signature"
@@ -721,9 +748,60 @@ export const SignatureRoute:FunctionComponent<{
                         ></textarea>
                     </div>
 
+                    <div class="form-group encoding">
+                        <h3>Public Key Encoding:</h3>
+                        <div class="radio-group" onChange=${handleVerifierPublicKeyEncodingChange}>
+                            <label class="radio-label">
+                                <input
+                                    type="radio"
+                                    name="ver-key-encoding"
+                                    value="base64pad"
+                                    checked=${state.verifier.publicKeyEncoding.value === 'base64pad'}
+                                />
+                                Base64Pad
+                            </label>
+                            <label class="radio-label">
+                                <input
+                                    type="radio"
+                                    name="ver-key-encoding"
+                                    value="base64url"
+                                    checked=${state.verifier.publicKeyEncoding.value === 'base64url'}
+                                />
+                                Base64URL
+                            </label>
+                            <label class="radio-label">
+                                <input
+                                    type="radio"
+                                    name="ver-key-encoding"
+                                    value="base58btc"
+                                    checked=${state.verifier.publicKeyEncoding.value === 'base58btc'}
+                                />
+                                Base58
+                            </label>
+                            <label class="radio-label">
+                                <input
+                                    type="radio"
+                                    name="ver-key-encoding"
+                                    value="hex"
+                                    checked=${state.verifier.publicKeyEncoding.value === 'hex'}
+                                />
+                                Hex
+                            </label>
+                            <label class="radio-label">
+                                <input
+                                    type="radio"
+                                    name="ver-key-encoding"
+                                    value="multikey"
+                                    checked=${state.verifier.publicKeyEncoding.value === 'multikey'}
+                                />
+                                Multikey
+                            </label>
+                        </div>
+                    </div>
+
                     <div class="form-group">
                         <label for="ver-publicKey">
-                            DID or public key (${state.verifier.encoding.value}):
+                            DID or public key (${state.verifier.publicKeyEncoding.value}):
                         </label>
                         <textarea
                             id="ver-publicKey"
