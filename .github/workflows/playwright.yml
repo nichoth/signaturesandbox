@@ -42,7 +42,7 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - name: Download report
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v6
         with:
           name: playwright-report
       - name: Upload to GitHub Pages
