@@ -35,8 +35,6 @@ export const SignatureRoute:FunctionComponent<{
     keyType:KeyType;
     title:string;
 }> = function SignatureRoute ({ state, keyType, title }) {
-    debug('rendering...', keyType)
-
     const encodedValue = useComputed<string>(() => {
         const baseEncoded = state.encodedPublicKeys.value?.[state.encodings.publicKey.value] || ''
 
@@ -97,7 +95,7 @@ export const SignatureRoute:FunctionComponent<{
 
     const showImportForm = useSignal<boolean>(false)
     const importPrivateKey = useSignal<string>('')
-    const importEncoding = useSignal<Uint8Encodings>('base64pad')
+    const importFormat = useSignal<'jwk'|'pem'>('jwk')
 
     const importKey = useCallback((ev:MouseEvent) => {
         ev.preventDefault()
@@ -189,10 +187,10 @@ export const SignatureRoute:FunctionComponent<{
         State.setVerifierPublicKeyEncoding(state, target.value as Uint8Encodings)
     }, [state])
 
-    const handleImportEncodingChange = useCallback((ev:Event) => {
+    const handleImportFormatChange = useCallback((ev:Event) => {
         const target = ev.target as HTMLInputElement
         if (target.type === 'radio' && target.checked) {
-            importEncoding.value = target.value as Uint8Encodings
+            importFormat.value = target.value as 'jwk'|'pem'
         }
     }, [])
 
@@ -202,37 +200,30 @@ export const SignatureRoute:FunctionComponent<{
         const privateKeyStr = form.elements['privateKey'].value.trim()
 
         try {
-            // Convert private key from the selected encoding to bytes
-            let privateKeyBytes:Uint8Array<ArrayBuffer>
-
-            if (importEncoding.value === 'multikey') {
-                // Decode multikey format
-                const decoded = decodeMultikey(privateKeyStr)
-                privateKeyBytes = decoded.key as Uint8Array<ArrayBuffer>
-            } else {
-                privateKeyBytes = fromString(
-                    privateKeyStr,
-                    importEncoding.value
-                ) as Uint8Array<ArrayBuffer>
-            }
-
             // Import based on key type
             if (keyType === 'ecc') {
+                // For Ed25519, always use JWK format
+                const jwk = JSON.parse(privateKeyStr)
+
+                if (jwk.kty !== 'OKP' || jwk.crv !== 'Ed25519') {
+                    throw new Error('Invalid Ed25519 JWK: must have kty="OKP" and crv="Ed25519"')
+                }
+
                 const privateKey = await crypto.subtle.importKey(
-                    'raw',
-                    privateKeyBytes,
+                    'jwk',
+                    jwk,
                     { name: 'Ed25519' },
                     true,
                     ['sign']
                 )
 
                 // Derive the public key
-                const jwk = await crypto.subtle.exportKey('jwk', privateKey)
-                if (!jwk.x) throw new Error('Failed to export public key')
+                const exportedJwk = await crypto.subtle.exportKey('jwk', privateKey)
+                if (!exportedJwk.x) throw new Error('Failed to export public key')
 
                 // JWK x parameter is always base64url encoded
                 const publicKeyBytes = fromString(
-                    jwk.x,
+                    exportedJwk.x,
                     'base64url'
                 ) as Uint8Array<ArrayBuffer>
 
@@ -254,17 +245,53 @@ export const SignatureRoute:FunctionComponent<{
                 state.eccKeys.value = keys
                 state.did.value = json.DID
             } else {
-                // For RSA, import as PKCS8
-                const privateKey = await crypto.subtle.importKey(
-                    'pkcs8',
-                    privateKeyBytes,
-                    {
-                        name: 'RSA-PSS',
-                        hash: 'SHA-256'
-                    },
-                    true,
-                    ['sign']
-                )
+                // For RSA, support both PEM and JWK formats
+                let privateKey:CryptoKey
+
+                if (importFormat.value === 'jwk') {
+                    // Parse JWK
+                    const jwk = JSON.parse(privateKeyStr)
+
+                    if (jwk.kty !== 'RSA') {
+                        throw new Error('Invalid RSA JWK: must have kty="RSA"')
+                    }
+
+                    privateKey = await crypto.subtle.importKey(
+                        'jwk',
+                        jwk,
+                        {
+                            name: 'RSA-PSS',
+                            hash: 'SHA-256'
+                        },
+                        true,
+                        ['sign']
+                    )
+                } else {
+                    // Parse PEM format
+                    // Remove PEM headers and decode base64
+                    const pemHeader = '-----BEGIN PRIVATE KEY-----'
+                    const pemFooter = '-----END PRIVATE KEY-----'
+                    const pemContents = privateKeyStr
+                        .replace(pemHeader, '')
+                        .replace(pemFooter, '')
+                        .replace(/\s/g, '')
+
+                    const binaryDer = fromString(
+                        pemContents,
+                        'base64pad'
+                    ) as Uint8Array<ArrayBuffer>
+
+                    privateKey = await crypto.subtle.importKey(
+                        'pkcs8',
+                        binaryDer,
+                        {
+                            name: 'RSA-PSS',
+                            hash: 'SHA-256'
+                        },
+                        true,
+                        ['sign']
+                    )
+                }
 
                 // Export public key
                 const jwk = await crypto.subtle.exportKey('jwk', privateKey)
@@ -425,53 +452,37 @@ export const SignatureRoute:FunctionComponent<{
 
                 ${showImportForm.value && html`
                     <form class="form-group" onSubmit=${handleImportPrivateKey}>
-                        <div class="form-group">
-                            <label>Private Key Encoding:</label>
-                            <div
-                                class="radio-group"
-                                onChange=${handleImportEncodingChange}
-                            >
-                                <label class="radio-label">
-                                    <input
-                                        type="radio"
-                                        name="import-encoding"
-                                        value="base64pad"
-                                        checked=${importEncoding.value === 'base64pad'}
-                                    />
-                                    Base64Pad
-                                </label>
-                                <label class="radio-label">
-                                    <input
-                                        type="radio"
-                                        name="import-encoding"
-                                        value="base64url"
-                                        checked=${importEncoding.value === 'base64url'}
-                                    />
-                                    Base64URL
-                                </label>
-                                <label class="radio-label">
-                                    <input
-                                        type="radio"
-                                        name="import-encoding"
-                                        value="base58btc"
-                                        checked=${importEncoding.value === 'base58btc'}
-                                    />
-                                    Base58
-                                </label>
-                                <label class="radio-label">
-                                    <input
-                                        type="radio"
-                                        name="import-encoding"
-                                        value="multikey"
-                                        checked=${importEncoding.value === 'multikey'}
-                                    />
-                                    Multikey
-                                </label>
+                        ${keyType === 'rsa' && html`
+                            <div class="form-group">
+                                <label>Private Key Format:</label>
+                                <div
+                                    class="radio-group"
+                                    onChange=${handleImportFormatChange}
+                                >
+                                    <label class="radio-label">
+                                        <input
+                                            type="radio"
+                                            name="import-format"
+                                            value="jwk"
+                                            checked=${importFormat.value === 'jwk'}
+                                        />
+                                        JWK
+                                    </label>
+                                    <label class="radio-label">
+                                        <input
+                                            type="radio"
+                                            name="import-format"
+                                            value="pem"
+                                            checked=${importFormat.value === 'pem'}
+                                        />
+                                        PEM
+                                    </label>
+                                </div>
                             </div>
-                        </div>
+                        `}
 
                         <label for="privateKey">
-                            Private Key (${importEncoding.value}):
+                            Private Key (${keyType === 'ecc' ? 'JWK' : importFormat.value.toUpperCase()}):
                         </label>
                         <textarea
                             id="privateKey"
@@ -481,8 +492,13 @@ export const SignatureRoute:FunctionComponent<{
                             onInput=${(e:any) => {
                                 importPrivateKey.value = e.target.value
                             }}
-                            placeholder="Paste your private key here"
-                            rows="4"
+                            placeholder=${keyType === 'ecc' ?
+                                'Paste your Ed25519 private key in JWK format' :
+                                importFormat.value === 'jwk' ?
+                                    'Paste your RSA private key in JWK format' :
+                                    'Paste your RSA private key in PEM format'
+                            }
+                            rows="6"
                         ></textarea>
 
                         <button class="action-button" type="submit">
