@@ -24,6 +24,7 @@
   "dependencies": {
     "@atcute/multibase": "^1.1.6",
     "@nichoth/components": "^0.16.16",
+    "@noble/ed25519": "^3.0.0",
     "@preact/signals": "^2.0.1",
     "@substrate-system/a11y": "^0.0.13",
     "@substrate-system/copy-button": "^0.5.16",

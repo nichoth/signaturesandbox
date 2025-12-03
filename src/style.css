@@ -286,6 +286,12 @@ pre {
     }
 }
 
+.keys {
+    & .info-text {
+        min-height: 5rem;
+    }
+}
+
 .key-display {
     margin: 2rem 0;
 

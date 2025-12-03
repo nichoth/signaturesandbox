@@ -19,6 +19,7 @@ import {
     toBase16
 } from '@atcute/multibase'
 import { decode as decodeMultikey } from '@substrate-system/multikey'
+import * as ed from '@noble/ed25519'
 
 const debug = Debug(isDev())
 const { toString, fromString } = u8
@@ -95,7 +96,7 @@ export const SignatureRoute:FunctionComponent<{
 
     const showImportForm = useSignal<boolean>(false)
     const importPrivateKey = useSignal<string>('')
-    const importFormat = useSignal<'jwk'|'pem'>('jwk')
+    const importFormat = useSignal<'jwk'|'pem'|'raw'>('jwk')
 
     const importKey = useCallback((ev:MouseEvent) => {
         ev.preventDefault()
@@ -190,7 +191,7 @@ export const SignatureRoute:FunctionComponent<{
     const handleImportFormatChange = useCallback((ev:Event) => {
         const target = ev.target as HTMLInputElement
         if (target.type === 'radio' && target.checked) {
-            importFormat.value = target.value as 'jwk'|'pem'
+            importFormat.value = target.value as 'jwk'|'pem'|'raw'
         }
     }, [])
 
@@ -202,20 +203,58 @@ export const SignatureRoute:FunctionComponent<{
         try {
             // Import based on key type
             if (keyType === 'ecc') {
-                // For Ed25519, always use JWK format
-                const jwk = JSON.parse(privateKeyStr)
+                // For Ed25519, support both raw and JWK formats
+                let privateKey:CryptoKey
 
-                if (jwk.kty !== 'OKP' || jwk.crv !== 'Ed25519') {
-                    throw new Error('Invalid Ed25519 JWK: must have kty="OKP" and crv="Ed25519"')
+                if (importFormat.value === 'raw') {
+                    // Raw format: just the 32-byte private key seed as base64url
+                    const seedBytes = fromString(
+                        privateKeyStr,
+                        'base64url'
+                    ) as Uint8Array<ArrayBuffer>
+
+                    if (seedBytes.length !== 32) {
+                        throw new Error('Invalid Ed25519 raw private key: must be 32 bytes')
+                    }
+
+                    // Derive the public key from the private seed using @noble/ed25519
+                    const publicKeyBytes = await ed.getPublicKeyAsync(seedBytes)
+
+                    // Convert both to base64url for JWK format
+                    const publicKeyBase64url = toString(publicKeyBytes, 'base64url')
+
+                    // Create JWK with both private and public keys
+                    const jwk = {
+                        kty: 'OKP',
+                        crv: 'Ed25519',
+                        d: privateKeyStr,  // Private key (already base64url)
+                        x: publicKeyBase64url,  // Public key (base64url)
+                        ext: true
+                    }
+
+                    privateKey = await crypto.subtle.importKey(
+                        'jwk',
+                        jwk,
+                        { name: 'Ed25519' },
+                        true,
+                        ['sign']
+                    )
+                } else {
+                    // JWK format
+                    const jwk = JSON.parse(privateKeyStr)
+
+                    if (jwk.kty !== 'OKP' || jwk.crv !== 'Ed25519') {
+                        throw new Error('Invalid Ed25519 JWK: must have kty="OKP" and crv="Ed25519"')
+                    }
+
+                    privateKey = await crypto.subtle.importKey(
+                        'jwk',
+                        jwk,
+                        { name: 'Ed25519' },
+                        true,
+                        ['sign']
+                    )
                 }
-
-                const privateKey = await crypto.subtle.importKey(
-                    'jwk',
-                    jwk,
-                    { name: 'Ed25519' },
-                    true,
-                    ['sign']
-                )
 
                 // Derive the public key
                 const exportedJwk = await crypto.subtle.exportKey('jwk', privateKey)
@@ -433,7 +472,7 @@ export const SignatureRoute:FunctionComponent<{
         </div>
 
         <div class="two-column-layout">
-            <div class="col-half">
+            <div class="col-half keys">
                 <h2>Keys</h2>
 
                 ${showImportForm.value ?
@@ -452,13 +491,32 @@ export const SignatureRoute:FunctionComponent<{
 
                 ${showImportForm.value && html`
                     <form class="form-group" onSubmit=${handleImportPrivateKey}>
-                        ${keyType === 'rsa' && html`
-                            <div class="form-group">
-                                <label>Private Key Format:</label>
-                                <div
-                                    class="radio-group"
-                                    onChange=${handleImportFormatChange}
-                                >
+                        <div class="form-group">
+                            <label>Private Key Format:</label>
+                            <div
+                                class="radio-group"
+                                onChange=${handleImportFormatChange}
+                            >
+                                ${keyType === 'ecc' ? html`
+                                    <label class="radio-label">
+                                        <input
+                                            type="radio"
+                                            name="import-format"
+                                            value="raw"
+                                            checked=${importFormat.value === 'raw'}
+                                        />
+                                        Raw
+                                    </label>
+                                    <label class="radio-label">
+                                        <input
+                                            type="radio"
+                                            name="import-format"
+                                            value="jwk"
+                                            checked=${importFormat.value === 'jwk'}
+                                        />
+                                        JWK
+                                    </label>
+                                ` : html`
                                     <label class="radio-label">
                                         <input
                                             type="radio"
@@ -477,12 +535,27 @@ export const SignatureRoute:FunctionComponent<{
                                         />
                                         PEM
                                     </label>
-                                </div>
+                                `}
                             </div>
-                        `}
+                            ${keyType === 'ecc' && html`
+                                <p class="info-text" style="margin-top: 0.5rem;">
+                                    ${importFormat.value === 'raw' ? html`
+                                        Raw format is the 32-byte Ed25519 private key seed
+                                        encoded as a base64url string (no padding).
+                                        This is just the raw key material without any
+                                        wrapper format like JWK.
+                                    ` : html`
+                                        JWK (JSON Web Key) format is a JSON object containing
+                                        the private key with metadata fields. For Ed25519, this
+                                        includes <code>kty</code>, <code>crv</code>, <code>x</code> (public key),
+                                        and <code>d</code> (private key) fields.
+                                    `}
+                                </p>
+                            `}
+                        </div>
 
                         <label for="privateKey">
-                            Private Key (${keyType === 'ecc' ? 'JWK' : importFormat.value.toUpperCase()}):
+                            Private Key (${importFormat.value.toUpperCase()}):
                         </label>
                         <textarea
                             id="privateKey"
@@ -492,11 +565,14 @@ export const SignatureRoute:FunctionComponent<{
                             onInput=${(e:any) => {
                                 importPrivateKey.value = e.target.value
                             }}
-                            placeholder=${keyType === 'ecc' ?
-                                'Paste your Ed25519 private key in JWK format' :
-                                importFormat.value === 'jwk' ?
-                                    'Paste your RSA private key in JWK format' :
-                                    'Paste your RSA private key in PEM format'
+                            placeholder=${
+                                keyType === 'ecc' ?
+                                    (importFormat.value === 'raw' ?
+                                        'Paste your Ed25519 private key seed as base64url (32 bytes)' :
+                                        'Paste your Ed25519 private key in JWK format') :
+                                    (importFormat.value === 'jwk' ?
+                                        'Paste your RSA private key in JWK format' :
+                                        'Paste your RSA private key in PEM format')
                             }
                             rows="6"
                         ></textarea>
